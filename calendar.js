@@ -84,7 +84,7 @@ function renderNotificacoes() {
       <div class="notificacao">
         ${n.texto}
       </div>
-    `
+    `,
     )
     .join("");
 }
@@ -95,7 +95,7 @@ function carregarCalendario() {
   conteudo.innerHTML = `
   <header class="header">
   <div id="notificacoes"></div>
-    <h1 id="mesAno"></h1>
+    <h1 id="mesAno" class="mes-clickavel"></h1>
     
     <div>
       <button id="prevMes">◀</button>
@@ -112,6 +112,9 @@ function carregarCalendario() {
 `;
 
   renderizarCalendario();
+  document.getElementById("mesAno").onclick = () => {
+    abrirSeletorData();
+  };
   ativarBusca();
 
   document.getElementById("prevMes").onclick = () => {
@@ -236,6 +239,104 @@ async function renderizarCalendario() {
   }
 }
 
+function abrirSeletorData() {
+  const modal = document.createElement("div");
+
+  modal.classList.add("modal");
+
+  const meses = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+
+  const anoAtual = new Date().getFullYear();
+
+  let optionsAno = "";
+
+  for (let ano = 1; ano <= 9999; ano++) {
+    optionsAno += `
+      <option
+        value="${ano}"
+        ${ano === dataAtual.getFullYear() ? "selected" : ""}
+      >
+        ${ano}
+      </option>
+    `;
+  }
+
+  modal.innerHTML = `
+
+    <div class="modal-conteudo mini-calendario-modal">
+
+      <h2>Selecionar data</h2>
+
+      <select id="selectMes">
+
+        ${meses
+          .map(
+            (m, i) => `
+          <option
+            value="${i}"
+            ${i === dataAtual.getMonth() ? "selected" : ""}
+          >
+            ${m}
+          </option>
+        `,
+          )
+          .join("")}
+
+      </select>
+
+      <select id="selectAno">
+        ${optionsAno}
+      </select>
+
+      <div class="botoes-mini-calendario">
+
+        <button id="cancelarMiniCalendario"
+          class="btn-secundario-ui">
+          Cancelar
+        </button>
+
+        <button id="confirmarMiniCalendario"
+          class="btn-primary-ui">
+          Abrir
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("cancelarMiniCalendario").onclick = () => {
+    modal.remove();
+  };
+
+  document.getElementById("confirmarMiniCalendario").onclick = () => {
+    const mes = Number(document.getElementById("selectMes").value);
+
+    const ano = Number(document.getElementById("selectAno").value);
+
+    dataAtual = new Date(ano, mes, 1);
+
+    modal.remove();
+
+    renderizarCalendario();
+  };
+}
 // ================== DIA (HORAS) ==================
 async function buscarEventosDoDia(ano, mes, dia) {
   if (!agendaId) {
@@ -302,13 +403,13 @@ async function abrirDia(dia, mes, ano) {
       <div class="acoes-evento">
 
   <button class="editar-evento">
-    <span>✏️</span>
-    Editar
+    <span>Editar</span>
+  
   </button>
 
   <button class="excluir-evento">
-    <span>🗑️</span>
-    Excluir
+    <span>Excluir</span>
+    
   </button>
 
 </div>
@@ -377,8 +478,13 @@ async function abrirDia(dia, mes, ano) {
 
           const dataKey = `${ano}-${mes}-${dia}`;
 
+          await moverParaLixeira("evento", {
+            ...e,
+            dataKey,
+          });
+
           await remove(
-            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`)
+            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`),
           );
 
           abrirDia(dia, mes, ano);
@@ -403,7 +509,7 @@ async function toggleFavorito(evento, ano, mes, dia) {
       ref(db, `agendas/${agendaId}/eventos/${dataKey}/${evento.id}`),
       {
         favorito: novoValor,
-      }
+      },
     );
 
     evento.favorito = novoValor;
@@ -470,7 +576,7 @@ function editarEvento(evento, dia, mes, ano) {
         descricao: document.getElementById("editDescricao").value,
 
         favorito: document.getElementById("editFavorito").checked,
-      }
+      },
     );
 
     modal.remove();
@@ -575,7 +681,7 @@ function adicionarEvento(dia, mes, ano, hora) {
 
       tag: document.getElementById("tagEvento").value,
     });
-    addNotificacao(`📅 Novo evento: ${nome}`);
+    addNotificacao(` Novo evento: ${nome}`);
     modal.remove();
     abrirDia(dia, mes, ano); // atualiza
   };
@@ -623,7 +729,7 @@ async function mostrarPreviewDia(dia, mes, ano) {
       <br>
       <small>${e.descricao || ""}</small>
     </div>
-  `
+  `,
     )
     .join("")}
 `;
@@ -638,7 +744,13 @@ if (btnHome) {
     filtroBusca = "";
 
     const input = document.getElementById("inputBusca");
-    if (input) input.value = "";
+
+    if (input) {
+      input.value = "";
+    }
+
+    // volta para mês atual
+    dataAtual = new Date();
 
     carregarCalendario();
   };
@@ -664,7 +776,7 @@ async function buscarEventosFiltrados(ano, mes, termo) {
       let filtrados = eventos.filter(
         (e) =>
           e.nome.toLowerCase().includes(termo.toLowerCase()) ||
-          String(diaDB).includes(termo)
+          String(diaDB).includes(termo),
       );
 
       if (filtrados.length > 0) {
@@ -704,19 +816,24 @@ function ativarBusca() {
       filtroBusca = termo;
 
       if (termo !== "") {
-        await irParaMesDoEvento(termo);
-      }
+        const encontrou = await irParaMesDoEvento(termo);
 
-      renderizarCalendario();
+        if (!encontrou) {
+          renderizarCalendario();
+        }
+      } else {
+        renderizarCalendario();
+      }
     }, 300);
   };
 }
 
 async function irParaMesDoEvento(termo) {
   if (!agendaId) return false;
+
   const snapshot = await get(ref(db, `agendas/${agendaId}/eventos`));
 
-  if (!snapshot.exists()) return;
+  if (!snapshot.exists()) return false;
 
   const dados = snapshot.val();
 
@@ -727,15 +844,19 @@ async function irParaMesDoEvento(termo) {
 
     let eventos = Object.values(dados[data]);
 
-    let encontrou = eventos.some(
-      (e) =>
+    let encontrou = eventos.some((e) => {
+      return (
         (e.nome && e.nome.toLowerCase().includes(termo)) ||
         String(diaDB).includes(termo)
-    );
+      );
+    });
 
     if (encontrou) {
-      // 🔥 muda o calendário
+      // muda automaticamente para o mês do evento
       dataAtual = new Date(anoDB, mesDB, 1);
+
+      renderizarCalendario();
+
       return true;
     }
   }
@@ -761,8 +882,42 @@ function abrirPerfil() {
 
       <p id="emailUsuario" style="margin-top:10px;"></p>
 
-      <button id="mudarConta">Mudar de conta</button>
-      <button id="logout">Deslogar</button>
+${
+  role === "admin"
+    ? `
+      <div class="codigo-admin">
+
+  <div class="codigo-topo">
+    <div>
+      <span class="codigo-label">
+        Código da agenda
+      </span>
+
+      <h3 class="codigo-texto">
+        ${agendaId}
+      </h3>
+    </div>
+
+    <button id="copiarCodigoAgenda" class="btn-copiar-codigo">
+      Copiar
+    </button>
+  </div>
+
+</div>
+
+      <button id="excluirAgenda" class="btn-danger">
+        Excluir Agenda
+      </button>
+    `
+    : `
+      <button id="sairAgenda" class="btn-danger">
+        Sair da Agenda
+      </button>
+    `
+}
+
+<button id="mudarConta">Mudar de conta</button>
+<button id="logout">Deslogar</button>
 
     </div>
   `;
@@ -861,6 +1016,125 @@ function abrirPerfil() {
   };
 
   // =========================
+  // SAIR DA AGENDA (MEMBRO)
+  // =========================
+
+  const sairAgendaBtn = document.getElementById("sairAgenda");
+
+  if (sairAgendaBtn) {
+    sairAgendaBtn.onclick = async () => {
+      const confirmar = confirm(
+        "Deseja realmente sair da agenda?\n\nVocê perderá suas informações da agenda.",
+      );
+
+      if (!confirmar) return;
+
+      try {
+        // remove membro da agenda
+        await remove(ref(db, `agendas/${agendaId}/membros/${currentUser.uid}`));
+
+        // remove tarefas
+        await remove(ref(db, `tarefas/${currentUser.uid}/${agendaId}`));
+
+        // remove anotações
+        await remove(ref(db, `anotacoes/${currentUser.uid}/${agendaId}`));
+
+        // remove agenda do usuário
+        await update(ref(db, `usuarios/${currentUser.uid}`), {
+          agendaId: null,
+          role: null,
+        });
+
+        alert("Você saiu da agenda!");
+
+        window.location.href = "selecionarAgenda.html";
+      } catch (erro) {
+        console.error(erro);
+
+        alert("Erro ao sair da agenda");
+      }
+    };
+  }
+
+  // =========================
+  // EXCLUIR AGENDA (ADMIN)
+  // =========================
+
+  const excluirAgendaBtn = document.getElementById("excluirAgenda");
+
+  if (excluirAgendaBtn) {
+    excluirAgendaBtn.onclick = async () => {
+      const confirmar = confirm(
+        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados.",
+      );
+
+      if (!confirmar) return;
+
+      try {
+        // pega membros
+        const membrosSnap = await get(ref(db, `agendas/${agendaId}/membros`));
+
+        if (membrosSnap.exists()) {
+          const membros = membrosSnap.val();
+
+          // limpa usuários
+          for (let uid in membros) {
+            await update(ref(db, `usuarios/${uid}`), {
+              agendaId: null,
+              role: null,
+            });
+
+            // remove tarefas
+            await remove(ref(db, `tarefas/${uid}/${agendaId}`));
+
+            // remove anotações
+            await remove(ref(db, `anotacoes/${uid}/${agendaId}`));
+          }
+        }
+
+        // remove agenda inteira
+        await remove(ref(db, `agendas/${agendaId}`));
+
+        alert("Agenda excluída!");
+
+        window.location.href = "selecionarAgenda.html";
+      } catch (erro) {
+        console.error(erro);
+
+        alert("Erro ao excluir agenda");
+      }
+    };
+  }
+
+  // =========================
+  // COPIAR CÓDIGO
+  // =========================
+
+  const copiarCodigoBtn = document.getElementById("copiarCodigoAgenda");
+
+  if (copiarCodigoBtn) {
+    copiarCodigoBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(agendaId);
+
+        copiarCodigoBtn.innerText = "Copiado";
+
+        copiarCodigoBtn.style.opacity = "0.85";
+
+        setTimeout(() => {
+          copiarCodigoBtn.innerText = "Copiar";
+
+          copiarCodigoBtn.style.opacity = "1";
+        }, 1800);
+      } catch (erro) {
+        console.error(erro);
+
+        alert("Erro ao copiar código");
+      }
+    };
+  }
+
+  // =========================
   // LOGOUT
   // =========================
   document.getElementById("logout").onclick = async () => {
@@ -878,17 +1152,13 @@ if (btnAnotacoes) {
 }
 
 const btnPerfil = document.getElementById("perfil");
-const btnTema = document.getElementById("tema");
-const btnCodigo = document.getElementById("codigoAgenda");
+
 const btnMembros = document.getElementById("membros");
 
 if (btnMembros) {
   btnMembros.onclick = abrirMembros;
 }
 
-if (btnCodigo) {
-  btnCodigo.onclick = abrirCodigoAgenda;
-}
 const btnAtividades = document.getElementById("atividades");
 
 if (btnAtividades) {
@@ -899,15 +1169,10 @@ if (btnPerfil) {
   btnPerfil.onclick = abrirPerfil;
 }
 
-if (btnTema) {
-  btnTema.onclick = () => {
-    document.body.classList.toggle("dark");
+const btnLixeira = document.getElementById("lixeira");
 
-    localStorage.setItem(
-      "tema",
-      document.body.classList.contains("dark") ? "dark" : "light"
-    );
-  };
+if (btnLixeira) {
+  btnLixeira.onclick = abrirLixeira;
 }
 
 function abrirAnotacoes() {
@@ -985,7 +1250,7 @@ async function renderizarAnotacoes() {
   lista.innerHTML = "";
 
   const snapshot = await get(
-    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`)
+    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`),
   );
 
   if (!snapshot.exists()) return;
@@ -997,9 +1262,42 @@ async function renderizarAnotacoes() {
     item.classList.add("card-anotacao"); // usa o CSS que você já tem
 
     item.innerHTML = `
-      <strong>${anotacao.titulo || "Sem título"}</strong>
-      <p>${(anotacao.texto || "").substring(0, 60)}...</p>
-    `;
+  <div class="topo-card-ui">
+
+    <div>
+      <strong>
+        ${anotacao.titulo || "Sem título"}
+      </strong>
+
+      <p>
+        ${(anotacao.texto || "").substring(0, 60)}...
+      </p>
+    </div>
+
+    <button class="btn-excluir-mini">
+      Excluir
+    </button>
+
+  </div>
+`;
+
+    item.querySelector(".btn-excluir-mini").onclick = async (ev) => {
+      ev.stopPropagation();
+
+      const confirmar = confirm("Excluir anotação?");
+
+      if (!confirmar) return;
+
+      await moverParaLixeira("anotacao", {
+        ...anotacao,
+        id,
+        uid: currentUser.uid,
+      });
+
+      await remove(ref(db, `anotacoes/${currentUser.uid}/${agendaId}/${id}`));
+
+      renderizarAnotacoes();
+    };
 
     // 👇 AGORA CORRETO (3 parâmetros)
     item.onclick = () =>
@@ -1055,6 +1353,11 @@ async function abrirPrincipaisEventos() {
         encontrados.push({
           id,
           ...e,
+
+          dia,
+          mes,
+          ano,
+
           dataFormatada: `${dia}/${Number(mes) + 1}/${ano}`,
         });
       }
@@ -1072,15 +1375,100 @@ async function abrirPrincipaisEventos() {
     card.classList.add("card-principal");
 
     card.innerHTML = `
-      <h3>${e.nome}</h3>
-      <p>${e.dataFormatada}</p>
-      <span>${e.hora}:00</span>
-    `;
+  <h3>${e.nome}</h3>
+
+  <p class="data-card-principal">
+    ${e.dataFormatada}
+  </p>
+
+  <span class="hora-card-principal">
+    ${e.hora}:00
+  </span>
+`;
+
+    card.onclick = () => {
+      abrirDetalhePrincipalEvento(e);
+    };
 
     lista.appendChild(card);
   });
 }
 
+function abrirDetalhePrincipalEvento(evento) {
+  const modal = document.createElement("div");
+
+  modal.classList.add("modal");
+
+  modal.innerHTML = `
+    <div class="modal-conteudo modal-evento-detalhe">
+
+      <h2>${evento.nome}</h2>
+
+      <div class="info-evento-detalhe">
+
+        <div class="linha-info">
+          <strong>Data</strong>
+          <span>${evento.dataFormatada}</span>
+        </div>
+
+        <div class="linha-info">
+          <strong>Horário</strong>
+          <span>${evento.hora}:00</span>
+        </div>
+
+        <div class="linha-info">
+          <strong>Categoria</strong>
+          <span>${evento.tag || "Sem categoria"}</span>
+        </div>
+
+      </div>
+
+      <div class="descricao-evento-detalhe">
+        ${evento.descricao || "Sem descrição"}
+      </div>
+
+      ${
+        evento.anexo
+          ? `
+          <img
+            src="${evento.anexo}"
+            class="imagem-evento-detalhe"
+          >
+        `
+          : ""
+      }
+
+      <div class="acoes-evento-detalhe">
+
+        <button id="irEventoCalendario"
+          class="btn-primary-ui">
+          Abrir no calendário
+        </button>
+
+        <button id="fecharDetalheEvento"
+          class="btn-secundario-ui">
+          Fechar
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("fecharDetalheEvento").onclick = () => {
+    modal.remove();
+  };
+
+  document.getElementById("irEventoCalendario").onclick = async () => {
+    modal.remove();
+
+    dataAtual = new Date(Number(evento.ano), Number(evento.mes), 1);
+
+    await abrirDia(Number(evento.dia), Number(evento.mes), Number(evento.ano));
+  };
+}
 // ================== LISTA DE TAREFAS ==================
 const btnTarefas = document.getElementById("tarefas");
 
@@ -1226,9 +1614,41 @@ async function renderizarListasTarefas() {
     const feitas = listaTarefa.itens.filter((i) => i.concluido).length;
 
     card.innerHTML = `
+  <div class="topo-card-ui">
+
+    <div>
       <strong>Lista</strong>
-      <p>${feitas}/${total} concluídas</p>
-    `;
+
+      <p>
+        ${feitas}/${total}
+        concluídas
+      </p>
+    </div>
+
+    <button class="btn-excluir-mini">
+      Excluir
+    </button>
+
+  </div>
+`;
+
+    card.querySelector(".btn-excluir-mini").onclick = async (ev) => {
+      ev.stopPropagation();
+
+      const confirmar = confirm("Excluir lista?");
+
+      if (!confirmar) return;
+
+      await moverParaLixeira("tarefa", {
+        ...listaTarefa,
+        id,
+        uid: currentUser.uid,
+      });
+
+      await remove(ref(db, `tarefas/${currentUser.uid}/${agendaId}/${id}`));
+
+      renderizarListasTarefas();
+    };
 
     card.onclick = () => abrirEditorTarefa(listaTarefa.itens, id);
 
@@ -1364,6 +1784,9 @@ function abrirModalAtividade() {
       urgencia,
       concluida: false,
       membros,
+
+      status: "a_fazer",
+      responsavel: null,
     });
 
     modal.remove();
@@ -1434,7 +1857,7 @@ function abrirEditarAtividade(atv, id, mes, ano) {
         urgencia: document.getElementById("editUrgenciaAtv").value,
 
         desc: document.getElementById("editDescAtv").value,
-      }
+      },
     );
 
     modal.remove();
@@ -1446,131 +1869,99 @@ function abrirEditarAtividade(atv, id, mes, ano) {
 async function renderizarTodasAtividades() {
   const lista = document.getElementById("listaAtividades");
 
-  lista.innerHTML = "";
+  lista.innerHTML = `
+    <div class="kanban">
+
+      <div class="coluna" id="col-a-fazer">
+        <h3>A fazer</h3>
+      </div>
+
+      <div class="coluna" id="col-andamento">
+        <h3>Em andamento</h3>
+      </div>
+
+      <div class="coluna" id="col-concluido">
+        <h3>Concluído</h3>
+      </div>
+
+    </div>
+  `;
 
   const snapshot = await get(ref(db, `agendas/${agendaId}/atividades`));
 
-  if (!snapshot.exists()) {
-    lista.innerHTML = "<p>Nenhuma atividade</p>";
-
-    return;
-  }
+  if (!snapshot.exists()) return;
 
   const dados = snapshot.val();
-
-  let atividades = [];
 
   for (let ano in dados) {
     for (let mes in dados[ano]) {
       for (let id in dados[ano][mes]) {
-        atividades.push({
-          id,
-          ano,
-          mes,
-          ...dados[ano][mes][id],
-        });
+        const atv = dados[ano][mes][id];
+
+        const card = document.createElement("div");
+        card.classList.add("card-atividade");
+        card.style.cursor = "pointer";
+
+        card.innerHTML = `
+          <strong>${atv.nome}</strong>
+          <p>${atv.desc || ""}</p>
+
+          <small>${atv.urgencia}</small>
+
+          ${atv.responsavel ? `<p>👤 Em andamento</p>` : `<p>👤 Livre</p>`}
+        `;
+        if (atv.responsavel === currentUser.uid) {
+          card.style.border = "2px solid lime";
+        }
+        // =========================
+        // CLICK (PEGAR ATIVIDADE)
+        // =========================
+        card.onclick = async () => {
+          const refAtv = ref(
+            db,
+            `agendas/${agendaId}/atividades/${ano}/${mes}/${id}`,
+          );
+
+          const snap = await get(refAtv);
+          const atual = snap.val();
+
+          // 🔒 já está em andamento por outro usuário
+          if (atual.responsavel && atual.responsavel !== currentUser.uid) {
+            alert("Já está sendo feita por outra pessoa");
+            return;
+          }
+
+          // 👇 PRIMEIRO CLICK = PEGA A ATIVIDADE
+          if (!atual.responsavel) {
+            await update(refAtv, {
+              status: "em_andamento",
+              responsavel: currentUser.uid,
+            });
+          }
+
+          abrirDetalheAtividade(atv, id, mes, ano);
+        };
+
+        // =========================
+        // COLOCAR NA COLUNA CERTA
+        // =========================
+        if (atv.status === "concluida") {
+          document.getElementById("col-concluido").appendChild(card);
+        } else if (atv.status === "em_andamento") {
+          document.getElementById("col-andamento").appendChild(card);
+        } else {
+          document.getElementById("col-a-fazer").appendChild(card);
+        }
       }
     }
   }
-
-  atividades.sort((a, b) => new Date(a.prazo) - new Date(b.prazo));
-
-  atividades.forEach((atv) => {
-    const card = document.createElement("div");
-
-    card.classList.add("card-atividade");
-
-    const hoje = new Date();
-
-    const prazo = new Date(atv.prazo);
-
-    let cor = "#2563eb"; // azul padrão
-
-    // diferença em dias
-    const diffTime = prazo - hoje;
-
-    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    // concluída = verde
-    if (atv.membros?.[currentUser.uid]?.status === "concluida") {
-      cor = "#22c55e";
-    }
-
-    // 1 dia antes OU atrasada = vermelha
-    else if (diffDias <= 1) {
-      cor = "#ef4444";
-    }
-
-    card.style.borderLeft = `5px solid ${cor}`;
-
-    card.innerHTML = `
-  <strong>${atv.nome}</strong>
-
-  <span class="data-atv">
-    📅 ${Number(atv.mes) + 1}/${atv.ano}
-  </span>
-
- <span class="urgencia urgencia-${atv.urgencia}">
-  ${atv.urgencia}
-</span>
-
-  <p>
-    Prazo: ${atv.prazo}
-  </p>
-
-  ${
-    role === "admin"
-      ? `
-      <div class="acoes-atividade">
-
-        <button class="editar-atv">
-          Editar
-        </button>
-
-        <button class="excluir-atv">
-          Excluir
-        </button>
-
-      </div>
-    `
-      : ""
-  }
-`;
-
-    card.onclick = () => abrirDetalheAtividade(atv, atv.id, atv.mes, atv.ano);
-
-    lista.appendChild(card);
-    if (role === "admin") {
-      const editarBtn = card.querySelector(".editar-atv");
-      const excluirBtn = card.querySelector(".excluir-atv");
-
-      editarBtn.onclick = async (ev) => {
-        ev.stopPropagation();
-
-        abrirEditarAtividade(atv, atv.id, atv.mes, atv.ano);
-      };
-
-      excluirBtn.onclick = async (ev) => {
-        ev.stopPropagation();
-
-        const confirmar = confirm("Deseja excluir esta atividade?");
-
-        if (!confirmar) return;
-
-        await remove(
-          ref(
-            db,
-            `agendas/${agendaId}/atividades/${atv.ano}/${atv.mes}/${atv.id}`
-          )
-        );
-
-        renderizarTodasAtividades();
-      };
-    }
-  });
 }
 
-async function abrirDetalheAtividade(atv, id, mes, ano) {
+function abrirDetalheAtividade(atv, id, mes, ano) {
+  const refAtv = ref(db, `agendas/${agendaId}/atividades/${ano}/${mes}/${id}`);
+
+  const podeEditar = role === "admin" || atv.responsavel === currentUser.uid;
+
   const isAdmin = role === "admin";
 
   conteudo.innerHTML = `
@@ -1600,17 +1991,14 @@ async function abrirDetalheAtividade(atv, id, mes, ano) {
   // 👇 SOMENTE MEMBROS possuem status
   if (!isAdmin) {
     // marca como em execução
-    await update(
+    update(
       ref(
         db,
-        `agendas/${agendaId}/atividades/${ano}/${mes}/${id}/membros/${currentUser.uid}`
+        `agendas/${agendaId}/atividades/${ano}/${mes}/${id}/membros/${currentUser.uid}`,
       ),
       {
-        status:
-          atv.membros?.[currentUser.uid]?.status === "concluida"
-            ? "concluida"
-            : "em_execucao",
-      }
+        status: "em_execucao",
+      },
     );
 
     // concluída
@@ -1624,34 +2012,11 @@ async function abrirDetalheAtividade(atv, id, mes, ano) {
 
     // botão concluir
     document.getElementById("concluir").onclick = async () => {
-      try {
-        await update(
-          ref(
-            db,
-            `agendas/${agendaId}/atividades/${ano}/${mes}/${id}/membros/${currentUser.uid}`
-          ),
-          {
-            status: "concluida",
-          }
-        );
+      await update(refAtv, {
+        status: "concluida",
+      });
 
-        // garante que membros existe
-        if (!atv.membros) {
-          atv.membros = {};
-        }
-
-        atv.membros[currentUser.uid] = {
-          status: "concluida",
-        };
-
-        // muda instantaneamente pra verde
-        renderizarTodasAtividades();
-        abrirAtividades();
-      } catch (erro) {
-        console.error(erro);
-
-        alert("Erro ao concluir atividade");
-      }
+      abrirAtividades();
     };
   }
 }
@@ -1861,6 +2226,209 @@ ${
         abrirMembros();
       };
     }
+
+    lista.appendChild(div);
+  }
+}
+
+// ================== BOTÃO TEMA FLUTUANTE ==================
+
+criarBotaoTema();
+
+function criarBotaoTema() {
+  const botao = document.createElement("button");
+
+  botao.id = "toggleTema";
+
+  atualizarIconeTema(botao);
+
+  botao.onclick = () => {
+    document.body.classList.toggle("dark");
+
+    const modoAtual = document.body.classList.contains("dark")
+      ? "dark"
+      : "light";
+
+    localStorage.setItem("tema", modoAtual);
+
+    atualizarIconeTema(botao);
+  };
+
+  document.body.appendChild(botao);
+}
+
+function atualizarIconeTema(botao) {
+  if (document.body.classList.contains("dark")) {
+    // ☀
+    botao.innerHTML = `
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="22"
+        height="22"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <circle cx="12" cy="12" r="5"></circle>
+
+        <path d="M12 1v2"></path>
+        <path d="M12 21v2"></path>
+
+        <path d="M4.22 4.22l1.42 1.42"></path>
+        <path d="M18.36 18.36l1.42 1.42"></path>
+
+        <path d="M1 12h2"></path>
+        <path d="M21 12h2"></path>
+
+        <path d="M4.22 19.78l1.42-1.42"></path>
+        <path d="M18.36 5.64l1.42-1.42"></path>
+      </svg>
+    `;
+  } else {
+    // 🌙
+    botao.innerHTML = `
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="22"
+        height="22"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="
+          M21 12.79A9 9 0 0 1
+          11.21 3
+          7 7 0 1 0
+          21 12.79z
+        "></path>
+      </svg>
+    `;
+  }
+}
+
+async function moverParaLixeira(tipo, dados) {
+  const idLixeira = crypto.randomUUID();
+
+  await set(ref(db, `lixeira/${agendaId}/${idLixeira}`), {
+    tipo,
+    dados,
+    deletadoEm: Date.now(),
+    expiraEm: Date.now() + 10 * 24 * 60 * 60 * 1000,
+  });
+}
+
+async function abrirLixeira() {
+  conteudo.innerHTML = `
+    <header class="header">
+      <button id="voltar">Voltar</button>
+      <h2>Lixeira</h2>
+    </header>
+
+    <div id="listaLixeira"></div>
+  `;
+
+  document.getElementById("voltar").onclick = carregarCalendario;
+
+  const lista = document.getElementById("listaLixeira");
+
+  const snapshot = await get(ref(db, `lixeira/${agendaId}`));
+
+  if (!snapshot.exists()) {
+    lista.innerHTML = "<p>Lixeira vazia</p>";
+
+    return;
+  }
+
+  const dados = snapshot.val();
+
+  for (let id in dados) {
+    const item = dados[id];
+
+    // APAGA AUTOMATICAMENTE
+    if (Date.now() > item.expiraEm) {
+      await remove(ref(db, `lixeira/${agendaId}/${id}`));
+
+      continue;
+    }
+
+    const diasRestantes = Math.ceil(
+      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24),
+    );
+
+    const div = document.createElement("div");
+
+    div.classList.add("card-anotacao");
+
+    div.innerHTML = `
+      <strong>
+        ${item.dados.nome || item.dados.titulo || "Item"}
+      </strong>
+
+      <p>
+        Tipo: ${item.tipo}
+      </p>
+
+      <small>
+        Excluído há expira em
+        ${diasRestantes} dias
+      </small>
+
+      <div class="acoes-lixeira">
+
+        <button class="restaurar-item">
+          Restaurar
+        </button>
+
+        <button class="apagar-item">
+          Excluir permanentemente
+        </button>
+
+      </div>
+    `;
+
+    // RESTAURAR
+    div.querySelector(".restaurar-item").onclick = async () => {
+      if (item.tipo === "evento") {
+        await set(
+          ref(
+            db,
+            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`,
+          ),
+          item.dados,
+        );
+      }
+
+      if (item.tipo === "anotacao") {
+        await set(
+          ref(db, `anotacoes/${item.dados.uid}/${agendaId}/${item.dados.id}`),
+          item.dados,
+        );
+      }
+
+      if (item.tipo === "tarefa") {
+        await set(
+          ref(db, `tarefas/${item.dados.uid}/${agendaId}/${item.dados.id}`),
+          item.dados,
+        );
+      }
+
+      await remove(ref(db, `lixeira/${agendaId}/${id}`));
+
+      abrirLixeira();
+    };
+
+    // EXCLUIR DEFINITIVO
+    div.querySelector(".apagar-item").onclick = async () => {
+      const confirmar = confirm("Excluir permanentemente?");
+
+      if (!confirmar) return;
+
+      await remove(ref(db, `lixeira/${agendaId}/${id}`));
+
+      abrirLixeira();
+    };
 
     lista.appendChild(div);
   }

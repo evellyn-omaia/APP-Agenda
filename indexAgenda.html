@@ -1,48 +1,52 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agenda</title>
-    <link rel="stylesheet" href="styleAgenda.css" />
-    <meta name="theme-color" content="#0f172a">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    
-    <div class="container">
-      <!-- MENU -->
-      <aside class="menu">
-        <h2>Agenda</h2>
-        <ul>
-          <li id="home">Home</li>
-          <li id="buscar">
-            Buscar
-            <input
-              type="text"
-              id="inputBusca"
-              placeholder="..."
-              style="display: none"
-            />
-          </li>
-          <li id="principais">Principais Eventos</li>
-         <li id="anotacoes">Anotações</li>
-          <li id="atividades">Atividades</li>
-          <li id="tarefas">Lista de Tarefas</li>
-          <li id="perfil">Perfil</li>
-          <li id="tema">Tema Escuro</li>
-          <li id="codigoAgenda">Código da Agenda</li>
-          <li id="membros">Membros da Equipe</li>
-        </ul>
-      </aside>
 
-      <!-- CONTEÚDO -->
-  
-      <main class="conteudo" id="conteudo"></main>
-    </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agenda</title>
+  <link rel="stylesheet" href="styleAgenda.css" />
+  <meta name="theme-color" content="#0f172a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
 
-    <script type="module" src="calendar.js"></script>
-  </body>
-</html>            
+<body>
+
+  <div class="container">
+    <!-- MENU -->
+    <aside class="menu">
+      <h2>Agenda</h2>
+      <ul>
+        <li id="buscar">
+          Pesquisar
+          <input type="text" id="inputBusca" placeholder="..." style="display: none" />
+        </li>
+        <li id="home">Home</li>
+
+        <li id="principais">Principais Eventos</li>
+        <li id="anotacoes">Anotações</li>
+        <li id="atividades">Atividades</li>
+        <li id="tarefas">Lista de Tarefas</li>
+        <li id="perfil">Perfil</li>
+        <li id="membros">Membros da Equipe</li>
+      </ul><button id="lixeira">
+        Lixeira
+      </button>
+
+
+
+
+
+    </aside>
+
+    <!-- CONTEÚDO -->
+
+    <main class="conteudo" id="conteudo"></main>
+  </div>
+
+  <script type="module" src="calendar.js"></script>
+</body>
+
+</html>

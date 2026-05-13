@@ -2444,6 +2444,12 @@ onValue(comentariosRef, (snapshot) => {
 .sort((a, b) => a[1].data - b[1].data)
 .forEach(([comentarioId, comentario]) => {
 
+  const comentarioEhMeu =
+  comentario.uid === currentUser.uid;
+
+const podeExcluir =
+  comentarioEhMeu || role === "admin";
+
     const div = document.createElement("div");
 
     div.classList.add("card-comentario");
@@ -2472,15 +2478,27 @@ onValue(comentariosRef, (snapshot) => {
 
       <div class="dropdown-comentario">
 
+  ${
+    comentarioEhMeu
+      ? `
         <button class="editar-comentario">
           Editar mensagem
         </button>
+      `
+      : ""
+  }
 
+  ${
+    podeExcluir
+      ? `
         <button class="excluir-comentario">
           Excluir
         </button>
+      `
+      : ""
+  }
 
-      </div>
+</div>
 
     </div>
 
@@ -2671,11 +2689,13 @@ document.getElementById(
   }
 
   // COMENTÁRIO NORMAL
-  await push(comentariosRef, {
-    nome,
-    texto,
-    data: Date.now(),
-  });
+ // COMENTÁRIO NORMAL
+await push(comentariosRef, {
+  nome,
+  texto,
+  uid: currentUser.uid,
+  data: Date.now(),
+});
 
   // MENÇÕES
   const marcacoes =

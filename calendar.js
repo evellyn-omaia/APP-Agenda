@@ -18,12 +18,17 @@ import {
   update,
   set,
   remove,
+  onValue,
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
 import { db } from "./firebaseDB.js";
 
 // LISTENER DE LOGIN
 const auth = getAuth();
+
+function nomeUsuario(email) {
+  return email.split("@")[0];
+}
 
 let role = null;
 let agendaId = null;
@@ -45,10 +50,14 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   currentUser = user;
+
   role = data.role;
+
   agendaId = data.agendaId;
 
   carregarCalendario();
+
+  ouvirNotificacoes();
 });
 
 const conteudo = document.getElementById("conteudo");
@@ -64,29 +73,67 @@ if (temaSalvo === "dark") {
 
 // ================== NOTIFICAÇÕES ================
 
-function addNotificacao(texto) {
-  notificacoes.unshift({
-    texto,
-    data: new Date(),
+function ouvirNotificacoes() {
+  if (!currentUser) return;
+
+  const notificacoesRef = ref(db, `usuarios/${currentUser.uid}/notificacoes`);
+
+  onValue(notificacoesRef, (snapshot) => {
+    const el = document.getElementById("notificacoes");
+
+    if (!el) return;
+
+    if (!snapshot.exists()) {
+      el.innerHTML = `
+        <div class="sem-notificacao">
+          Nenhuma notificação
+        </div>
+      `;
+
+      return;
+    }
+
+    const dados = snapshot.val();
+
+    const lista = Object.entries(dados)
+      .map(([id, n]) => ({
+        id,
+        ...n,
+      }))
+      .sort((a, b) => b.data - a.data)
+      .slice(0, 8);
+
+    el.innerHTML = lista
+      .map((n) => {
+        const recomendada = n.tipo === "recomendacao";
+
+        return `
+          <div class="
+            card-notificacao
+            ${recomendada ? "notif-destaque" : ""}
+          ">
+
+            <div class="notif-icon">
+              ${recomendada ? "⭐" : "🔔"}
+            </div>
+
+            <div class="notif-info">
+
+              <div class="notif-texto">
+                ${n.texto}
+              </div>
+
+              <small class="notif-data">
+                ${new Date(n.data).toLocaleString()}
+              </small>
+
+            </div>
+
+          </div>
+        `;
+      })
+      .join("");
   });
-
-  renderNotificacoes();
-}
-
-function renderNotificacoes() {
-  const el = document.getElementById("notificacoes");
-  if (!el) return;
-
-  el.innerHTML = notificacoes
-    .slice(0, 5)
-    .map(
-      (n) => `
-      <div class="notificacao">
-        ${n.texto}
-      </div>
-    `,
-    )
-    .join("");
 }
 
 // ================== CALENDÁRIO ================
@@ -291,7 +338,7 @@ function abrirSeletorData() {
           >
             ${m}
           </option>
-        `,
+        `
           )
           .join("")}
 
@@ -484,7 +531,7 @@ async function abrirDia(dia, mes, ano) {
           });
 
           await remove(
-            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`),
+            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`)
           );
 
           abrirDia(dia, mes, ano);
@@ -509,7 +556,7 @@ async function toggleFavorito(evento, ano, mes, dia) {
       ref(db, `agendas/${agendaId}/eventos/${dataKey}/${evento.id}`),
       {
         favorito: novoValor,
-      },
+      }
     );
 
     evento.favorito = novoValor;
@@ -576,7 +623,7 @@ function editarEvento(evento, dia, mes, ano) {
         descricao: document.getElementById("editDescricao").value,
 
         favorito: document.getElementById("editFavorito").checked,
-      },
+      }
     );
 
     modal.remove();
@@ -681,7 +728,31 @@ function adicionarEvento(dia, mes, ano, hora) {
 
       tag: document.getElementById("tagEvento").value,
     });
-    addNotificacao(` Novo evento: ${nome}`);
+
+    const membrosSnap = await get(
+  ref(db, `agendas/${agendaId}/membros`)
+);
+
+if (membrosSnap.exists()) {
+
+  const membros = membrosSnap.val();
+
+  for (let uid in membros) {
+
+    await push(
+      ref(db, `usuarios/${uid}/notificacoes`)
+    , {
+      texto: `📅 Novo evento criado: ${nome}`,
+
+      tipo: "evento",
+
+      lida: false,
+
+      data: Date.now(),
+    });
+  }
+}
+    
     modal.remove();
     abrirDia(dia, mes, ano); // atualiza
   };
@@ -729,7 +800,7 @@ async function mostrarPreviewDia(dia, mes, ano) {
       <br>
       <small>${e.descricao || ""}</small>
     </div>
-  `,
+  `
     )
     .join("")}
 `;
@@ -776,7 +847,7 @@ async function buscarEventosFiltrados(ano, mes, termo) {
       let filtrados = eventos.filter(
         (e) =>
           e.nome.toLowerCase().includes(termo.toLowerCase()) ||
-          String(diaDB).includes(termo),
+          String(diaDB).includes(termo)
       );
 
       if (filtrados.length > 0) {
@@ -1024,7 +1095,7 @@ ${
   if (sairAgendaBtn) {
     sairAgendaBtn.onclick = async () => {
       const confirmar = confirm(
-        "Deseja realmente sair da agenda?\n\nVocê perderá suas informações da agenda.",
+        "Deseja realmente sair da agenda?\n\nVocê perderá suas informações da agenda."
       );
 
       if (!confirmar) return;
@@ -1065,7 +1136,7 @@ ${
   if (excluirAgendaBtn) {
     excluirAgendaBtn.onclick = async () => {
       const confirmar = confirm(
-        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados.",
+        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados."
       );
 
       if (!confirmar) return;
@@ -1250,7 +1321,7 @@ async function renderizarAnotacoes() {
   lista.innerHTML = "";
 
   const snapshot = await get(
-    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`),
+    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`)
   );
 
   if (!snapshot.exists()) return;
@@ -1389,6 +1460,8 @@ async function abrirPrincipaisEventos() {
     card.onclick = () => {
       abrirDetalhePrincipalEvento(e);
     };
+
+
 
     lista.appendChild(card);
   });
@@ -1595,67 +1668,6 @@ function abrirEditorTarefa(lista = [], id = null) {
   };
 }
 
-async function renderizarListasTarefas() {
-  if (!agendaId) return;
-  const lista = document.getElementById("listaTarefas");
-  lista.innerHTML = "";
-
-  const snapshot = await get(ref(db, `tarefas/${currentUser.uid}/${agendaId}`));
-
-  if (!snapshot.exists()) return;
-
-  const dados = snapshot.val();
-
-  Object.entries(dados).forEach(([id, listaTarefa]) => {
-    const card = document.createElement("div");
-    card.classList.add("card-anotacao");
-
-    const total = listaTarefa.itens.length;
-    const feitas = listaTarefa.itens.filter((i) => i.concluido).length;
-
-    card.innerHTML = `
-  <div class="topo-card-ui">
-
-    <div>
-      <strong>Lista</strong>
-
-      <p>
-        ${feitas}/${total}
-        concluídas
-      </p>
-    </div>
-
-    <button class="btn-excluir-mini">
-      Excluir
-    </button>
-
-  </div>
-`;
-
-    card.querySelector(".btn-excluir-mini").onclick = async (ev) => {
-      ev.stopPropagation();
-
-      const confirmar = confirm("Excluir lista?");
-
-      if (!confirmar) return;
-
-      await moverParaLixeira("tarefa", {
-        ...listaTarefa,
-        id,
-        uid: currentUser.uid,
-      });
-
-      await remove(ref(db, `tarefas/${currentUser.uid}/${agendaId}/${id}`));
-
-      renderizarListasTarefas();
-    };
-
-    card.onclick = () => abrirEditorTarefa(listaTarefa.itens, id);
-
-    lista.appendChild(card);
-  });
-}
-
 // ================== ATIVIDADE ==================
 
 async function abrirAtividades() {
@@ -1705,94 +1717,201 @@ function abrirModalAtividade() {
   modal.classList.add("modal");
 
   modal.innerHTML = `
-    <div class="modal-conteudo">
+    <div class="modal-conteudo modal-atividade">
 
-      <h2>Nova Atividade</h2>
+      <h2 class="titulo-modal-atv">
+        Nova Atividade
+      </h2>
 
-      <input id="nomeAtv" placeholder="Nome">
+      <div class="grupo-input">
+        <label>Nome da atividade</label>
+        <input id="nomeAtv" placeholder="Digite o nome">
+      </div>
 
-      <input type="date" id="inicioAtv">
+      <div class="grupo-input">
+        <label>Data de início</label>
+        <input type="date" id="inicioAtv">
+      </div>
 
-      <input type="date" id="prazoAtv">
+      <div class="grupo-input">
+        <label>Prazo final</label>
+        <input type="date" id="prazoAtv">
+      </div>
 
-      <select id="urgenciaAtv">
-        <option value="baixa">Baixa</option>
-        <option value="media">Média</option>
-        <option value="alta">Alta</option>
-      </select>
+      <div class="grupo-input">
+        <label>Nível de urgência</label>
 
-      <textarea id="descAtv"
-        placeholder="Descrição"></textarea>
+        <select id="urgenciaAtv">
+          <option value="baixa">🟢 Baixa</option>
+          <option value="media">🟡 Média</option>
+          <option value="alta">🔴 Alta</option>
+        </select>
+      </div>
 
-      <button id="salvarAtv">
-        Salvar
-      </button>
+      <div class="grupo-input">
+        <label>Recomendar para um membro</label>
 
-      <button id="fecharModal">
-        Cancelar
-      </button>
+        <select id="membroRecomendado">
+          <option value="">Ninguém</option>
+        </select>
+      </div>
+
+      <div class="grupo-input">
+        <label>Descrição</label>
+
+        <textarea
+          id="descAtv"
+          placeholder="Digite a descrição"
+        ></textarea>
+      </div>
+
+      <div class="botoes-modal-atv">
+
+        <button id="salvarAtv" class="btn-salvar-atv">
+          Criar atividade
+        </button>
+
+        <button id="fecharModal" class="btn-cancelar-atv">
+          Cancelar
+        </button>
+
+      </div>
 
     </div>
   `;
 
   document.body.appendChild(modal);
 
-  document.getElementById("fecharModal").onclick = () => modal.remove();
+  // =========================
+  // FECHAR
+  // =========================
 
-  document.getElementById("salvarAtv").onclick = async () => {
-    const nome = document.getElementById("nomeAtv").value;
-
-    const inicio = document.getElementById("inicioAtv").value;
-
-    const prazo = document.getElementById("prazoAtv").value;
-
-    const desc = document.getElementById("descAtv").value;
-
-    const urgencia = document.getElementById("urgenciaAtv").value;
-
-    if (!nome) {
-      alert("Digite um nome");
-      return;
-    }
-
-    const membrosSnap = await get(ref(db, `agendas/${agendaId}/membros`));
-
-    let membros = {};
-
-    if (membrosSnap.exists()) {
-      const dados = membrosSnap.val();
-
-      for (let uid in dados) {
-        if (uid === currentUser.uid) continue;
-
-        membros[uid] = {
-          status: "pendente",
-        };
-      }
-    }
-
-    const data = new Date(prazo);
-
-    const ano = data.getFullYear();
-    const mes = data.getMonth();
-
-    await push(ref(db, `agendas/${agendaId}/atividades/${ano}/${mes}`), {
-      nome,
-      inicio,
-      prazo,
-      desc,
-      urgencia,
-      concluida: false,
-      membros,
-
-      status: "a_fazer",
-      responsavel: null,
-    });
-
+  document.getElementById("fecharModal").onclick = () => {
     modal.remove();
-
-    renderizarTodasAtividades();
   };
+
+  // =========================
+  // CARREGAR MEMBROS
+  // =========================
+
+  get(ref(db, `agendas/${agendaId}/membros`)).then((snap) => {
+    if (!snap.exists()) return;
+
+    const membros = snap.val();
+
+    const select = document.getElementById("membroRecomendado");
+
+    for (let uid in membros) {
+      if (uid === currentUser.uid) continue;
+
+      const membro = membros[uid];
+
+      const option = document.createElement("option");
+
+      option.value = uid;
+
+      option.textContent = (membro.email || "Membro").split("@")[0];
+
+      select.appendChild(option);
+    }
+  });
+
+  // =========================
+  // SALVAR
+  // =========================
+
+  document.getElementById("salvarAtv").onclick = () => {
+    salvarNovaAtividade(modal);
+  };
+}
+
+async function salvarNovaAtividade(modal) {
+  const nome = document.getElementById("nomeAtv").value;
+
+  const inicio = document.getElementById("inicioAtv").value;
+
+  const prazo = document.getElementById("prazoAtv").value;
+
+  const desc = document.getElementById("descAtv").value;
+
+  const urgencia = document.getElementById("urgenciaAtv").value;
+
+  const recomendado = document.getElementById("membroRecomendado").value;
+
+  if (!nome.trim()) {
+    alert("Digite um nome");
+    return;
+  }
+
+  let recomendadoNome = null;
+
+  if (recomendado) {
+    const membroSnap = await get(
+      ref(db, `agendas/${agendaId}/membros/${recomendado}`)
+    );
+
+    if (membroSnap.exists()) {
+      const membro = membroSnap.val();
+
+      recomendadoNome = (membro.email || "").split("@")[0];
+    }
+  }
+
+  // =========================
+  // CRIA ATIVIDADE
+  // =========================
+
+  const novaRef = push(ref(db, `agendas/${agendaId}/atividades`));
+
+  await set(novaRef, {
+    nome,
+    inicio,
+    prazo,
+    desc,
+    urgencia,
+
+    status: "a-fazer",
+
+    responsavel: null,
+    responsavelNome: null,
+
+    recomendadoPara: recomendado || null,
+    recomendadoParaNome: recomendadoNome || null,
+
+    criadoPor: currentUser.email,
+
+    criadoEm: Date.now(),
+  });
+
+  // =========================
+  // NOTIFICAÇÕES
+  // =========================
+
+  const membrosSnap = await get(ref(db, `agendas/${agendaId}/membros`));
+
+  if (membrosSnap.exists()) {
+    const membros = membrosSnap.val();
+
+    for (let uid in membros) {
+      const destaque = uid === recomendado;
+
+      await push(ref(db, `usuarios/${uid}/notificacoes`), {
+        texto: destaque
+          ? `⭐ Atividade recomendada para você: ${nome}`
+          : `📌 Nova atividade criada: ${nome}`,
+
+        tipo: destaque ? "recomendacao" : "atividade",
+
+        lida: false,
+
+        data: Date.now(),
+      });
+    }
+  }
+
+  modal.remove();
+
+  renderizarTodasAtividades();
 }
 
 function abrirEditarAtividade(atv, id, mes, ano) {
@@ -1845,20 +1964,17 @@ function abrirEditarAtividade(atv, id, mes, ano) {
   document.getElementById("fecharEditAtv").onclick = () => modal.remove();
 
   document.getElementById("salvarEdicaoAtv").onclick = async () => {
-    await update(
-      ref(db, `agendas/${agendaId}/atividades/${ano}/${mes}/${id}`),
-      {
-        nome: document.getElementById("editNomeAtv").value,
+    await update(ref(db, `agendas/${agendaId}/atividades/${id}`), {
+      nome: document.getElementById("editNomeAtv").value,
 
-        inicio: document.getElementById("editInicioAtv").value,
+      inicio: document.getElementById("editInicioAtv").value,
 
-        prazo: document.getElementById("editPrazoAtv").value,
+      prazo: document.getElementById("editPrazoAtv").value,
 
-        urgencia: document.getElementById("editUrgenciaAtv").value,
+      urgencia: document.getElementById("editUrgenciaAtv").value,
 
-        desc: document.getElementById("editDescAtv").value,
-      },
-    );
+      desc: document.getElementById("editDescAtv").value,
+    });
 
     modal.remove();
 
@@ -1873,15 +1989,24 @@ async function renderizarTodasAtividades() {
     <div class="kanban">
 
       <div class="coluna" id="col-a-fazer">
-        <h3>A fazer</h3>
+        <h3>
+  A fazer
+  <span id="count-afazer">0</span>
+</h3>
       </div>
 
       <div class="coluna" id="col-andamento">
-        <h3>Em andamento</h3>
+        <h3>
+  Em andamento
+  <span id="count-andamento">0</span>
+</h3>
       </div>
 
       <div class="coluna" id="col-concluido">
-        <h3>Concluído</h3>
+        <h3>
+  Concluído
+  <span id="count-concluido">0</span>
+</h3>
       </div>
 
     </div>
@@ -1893,133 +2018,729 @@ async function renderizarTodasAtividades() {
 
   const dados = snapshot.val();
 
-  for (let ano in dados) {
-    for (let mes in dados[ano]) {
-      for (let id in dados[ano][mes]) {
-        const atv = dados[ano][mes][id];
+  let totalAFazer = 0;
+  let totalAndamento = 0;
+  let totalConcluido = 0;
 
-        const card = document.createElement("div");
-        card.classList.add("card-atividade");
-        card.style.cursor = "pointer";
+  for (let id in dados) {
 
-        card.innerHTML = `
-          <strong>${atv.nome}</strong>
-          <p>${atv.desc || ""}</p>
+  const atv = dados[id];
 
-          <small>${atv.urgencia}</small>
+  if (atv.status === "concluida") {
+      totalConcluido++;
+    } else if (atv.status === "em_andamento") {
+      totalAndamento++;
+    } else {
+      totalAFazer++;
+    }
 
-          ${atv.responsavel ? `<p>👤 Em andamento</p>` : `<p>👤 Livre</p>`}
-        `;
-        if (atv.responsavel === currentUser.uid) {
-          card.style.border = "2px solid lime";
-        }
-        // =========================
-        // CLICK (PEGAR ATIVIDADE)
-        // =========================
-        card.onclick = async () => {
-          const refAtv = ref(
-            db,
-            `agendas/${agendaId}/atividades/${ano}/${mes}/${id}`,
-          );
+   
 
-          const snap = await get(refAtv);
-          const atual = snap.val();
+    const card = document.createElement("div");
+    card.classList.add("card-atividade");
+    card.style.cursor = "pointer";
 
-          // 🔒 já está em andamento por outro usuário
-          if (atual.responsavel && atual.responsavel !== currentUser.uid) {
-            alert("Já está sendo feita por outra pessoa");
-            return;
-          }
+    card.innerHTML = `
+  <div class="topo-card-atv">
 
-          // 👇 PRIMEIRO CLICK = PEGA A ATIVIDADE
-          if (!atual.responsavel) {
-            await update(refAtv, {
-              status: "em_andamento",
-              responsavel: currentUser.uid,
-            });
-          }
+    <div>
+      <h3>${atv.nome}</h3>
 
-          abrirDetalheAtividade(atv, id, mes, ano);
-        };
+      <span class="badge-urgencia ${atv.urgencia}">
+        ${atv.urgencia}
+      </span>
+    </div>
 
-        // =========================
-        // COLOCAR NA COLUNA CERTA
-        // =========================
-        if (atv.status === "concluida") {
-          document.getElementById("col-concluido").appendChild(card);
-        } else if (atv.status === "em_andamento") {
-          document.getElementById("col-andamento").appendChild(card);
-        } else {
-          document.getElementById("col-a-fazer").appendChild(card);
-        }
+    <div class="status-atv ${atv.status}">
+      ${
+        atv.status === "concluida"
+          ? "✅"
+          : atv.status === "em_andamento"
+          ? "🟡"
+          : "⚪"
       }
+    </div>
+
+  </div>
+
+  <p class="desc-atv">
+    ${atv.desc || "Sem descrição"}
+  </p>
+
+  <div class="infos-atv">
+
+    <small>
+      📅 ${atv.prazo || "Sem prazo"}
+    </small>
+
+    <small>
+      👤 ${atv.responsavelNome ? atv.responsavelNome.split("@")[0] : "Livre"}
+    </small>
+
+  </div>
+
+  ${
+    atv.recomendadoPara
+      ? `
+      <div class="recomendado-tag">
+        ⭐ Recomendado para:
+        ${atv.recomendadoParaNome || "Membro"}
+      </div>
+    `
+      : ""
+  }
+`;
+    if (atv.responsavel === currentUser.uid) {
+      card.style.border = "2px solid lime";
+    }
+    // =========================
+    // CLICK (PEGAR ATIVIDADE)
+    // =========================
+    card.onclick = () => {
+      abrirModalDetalheAtividade(atv, id);
+    };
+
+    const botoes = card.querySelectorAll("button");
+
+botoes.forEach((btn) => {
+
+  btn.addEventListener("click", (ev) => {
+
+    ev.stopPropagation();
+
+  });
+
+});
+
+    // =========================
+    // COLOCAR NA COLUNA CERTA
+    // =========================
+    if (atv.status === "concluida") {
+      document.getElementById("col-concluido").appendChild(card);
+    } else if (atv.status === "em_andamento") {
+      document.getElementById("col-andamento").appendChild(card);
+    } else {
+      document.getElementById("col-a-fazer").appendChild(card);
     }
   }
+
+  document.getElementById("count-afazer").innerText = totalAFazer;
+
+  document.getElementById("count-andamento").innerText = totalAndamento;
+
+  document.getElementById("count-concluido").innerText = totalConcluido;
 }
 
-function abrirDetalheAtividade(atv, id, mes, ano) {
-  const refAtv = ref(db, `agendas/${agendaId}/atividades/${ano}/${mes}/${id}`);
+function abrirModalDetalheAtividade(atv, id) {
+  const modal = document.createElement("div");
 
-  const podeEditar = role === "admin" || atv.responsavel === currentUser.uid;
+  modal.classList.add("modal");
 
-  const isAdmin = role === "admin";
+  const euSouResponsavel = atv.responsavel === currentUser.uid;
 
-  conteudo.innerHTML = `
-    <header class="header">
-      <button id="voltar">⬅</button>
-      <h2>${atv.nome}</h2>
-    </header>
+  const atividadeLivre = !atv.responsavel;
 
-    <div class="detalhe-atividade">
-      <p><strong>Início:</strong> ${atv.inicio}</p>
-      <p><strong>Prazo:</strong> ${atv.prazo}</p>
-      <p><strong>Urgência:</strong> ${atv.urgencia}</p>
-      <p>${atv.desc}</p>
+  let botao = "";
 
-      <div id="statusAtividade"></div>
+  let botoesAdmin = "";
 
-      ${!isAdmin ? `<button id="concluir">Marcar como concluída</button>` : ""}
+if (role === "admin") {
+
+  botoesAdmin = `
+
+    <div class="acoes-admin-atv">
+
+      <button id="editarAtividade"
+        class="btn-editar-atv">
+        ✏ Editar
+      </button>
+
+      <button id="removerAtividade"
+        class="btn-remover-atv">
+        🗑 Remover
+      </button>
+
     </div>
-  `;
 
-  document.getElementById("voltar").onclick = async () => {
-    await abrirAtividades();
+  `;
+}
+
+  // A FAZER
+  if (atv.status === "a-fazer" && atividadeLivre) {
+    botao = `
+  <button
+    id="btnFazerAtividade"
+    class="btn-primary-atv"
+  >
+    🚀 Fazer atividade
+  </button>
+`;
+  }
+
+  // EM ANDAMENTO
+  else if (atv.status === "em_andamento" && euSouResponsavel) {
+    botao = `
+  <button
+    id="btnConcluirAtividade"
+    class="btn-success-atv"
+  >
+    ✅ Concluir atividade
+  </button>
+`;
+  }
+
+  modal.innerHTML = `
+  <div class="modal-conteudo modal-detalhe-atv">
+
+    <div class="topo-detalhe-atv">
+
+      <div>
+
+        <h2>${atv.nome}</h2>
+
+        <span class="
+          badge-urgencia-modal
+          ${atv.urgencia}
+        ">
+          ${atv.urgencia}
+        </span>
+
+      </div>
+
+      <div class="
+        status-modal-atv
+        ${atv.status}
+      ">
+
+        ${
+          atv.status === "concluida"
+            ? "✅ Concluída"
+            : atv.status === "em_andamento"
+            ? "🟡 Em andamento"
+            : "⚪ A fazer"
+        }
+
+      </div>
+
+    </div>
+
+    <div class="conteudo-detalhe-atv">
+
+      <div class="linha-detalhe-atv">
+        <span>📅 Prazo</span>
+        <strong>
+          ${atv.prazo || "Sem prazo"}
+        </strong>
+      </div>
+
+      <div class="linha-detalhe-atv">
+        <span>👤 Responsável</span>
+
+        <strong>
+          ${
+            atv.responsavelNome
+              ? atv.responsavelNome.split("@")[0]
+              : "Livre"
+          }
+        </strong>
+      </div>
+
+      ${
+        atv.recomendadoParaNome
+          ? `
+          <div class="recomendado-modal-atv">
+
+            ⭐ Recomendado para:
+            <strong>
+              ${atv.recomendadoParaNome}
+            </strong>
+
+          </div>
+        `
+          : ""
+      }
+
+      <div class="descricao-modal-atv">
+        ${atv.desc || "Sem descrição"}
+      </div>
+
+      
+
+    </div>
+
+<div class="area-comentarios">
+
+  <div class="titulo-comentarios">
+    Comentários
+  </div>
+
+  <div class="comentario-box">
+
+    <textarea
+      id="inputComentario"
+      class="input-comentario"
+      placeholder="Escreva um comentário..."
+    ></textarea>
+
+    <button
+      id="btnEnviarComentario"
+      class="btn-comentar"
+    >
+      Enviar
+    </button>
+
+  </div>
+
+  <div
+    id="listaComentarios"
+    class="lista-comentarios"
+  ></div>
+
+</div>
+
+    <div class="acoes-modal-atv">
+
+      ${botao}
+
+      ${botoesAdmin}
+
+      <button
+        id="fecharModalAtv"
+        class="btn-secundario-atv"
+      >
+        Fechar
+      </button>
+
+    </div>
+
+  </div>
+`;
+  document.body.appendChild(modal);
+
+  document.getElementById("fecharModalAtv").onclick = () => {
+    modal.remove();
   };
 
-  const statusDiv = document.getElementById("statusAtividade");
+  // =========================
+// EDITAR
+// =========================
 
-  // 👇 SOMENTE MEMBROS possuem status
-  if (!isAdmin) {
-    // marca como em execução
-    update(
-      ref(
-        db,
-        `agendas/${agendaId}/atividades/${ano}/${mes}/${id}/membros/${currentUser.uid}`,
-      ),
-      {
-        status: "em_execucao",
-      },
+const editarAtividadeBtn =
+  document.getElementById("editarAtividade");
+
+if (editarAtividadeBtn) {
+
+  editarAtividadeBtn.onclick = () => {
+
+    modal.remove();
+
+    abrirEditarAtividade(atv, id);
+
+  };
+}
+
+// =========================
+// REMOVER
+// =========================
+
+const removerAtividadeBtn =
+  document.getElementById("removerAtividade");
+
+if (removerAtividadeBtn) {
+
+  removerAtividadeBtn.onclick = async () => {
+
+    const confirmar = confirm(
+      "Deseja remover esta atividade?"
     );
 
-    // concluída
-    if (atv.membros?.[currentUser.uid]?.status === "concluida") {
-      statusDiv.innerHTML = `
-        <span style="color:lime;">
-          ✅ Atividade concluída
-        </span>
-      `;
-    }
+    if (!confirmar) return;
 
-    // botão concluir
-    document.getElementById("concluir").onclick = async () => {
-      await update(refAtv, {
+    // SALVA NA LIXEIRA
+    await moverParaLixeira("atividade", {
+      ...atv,
+      id,
+    });
+
+    // REMOVE
+    await remove(
+      ref(db, `agendas/${agendaId}/atividades/${id}`)
+    );
+
+    modal.remove();
+
+    renderizarTodasAtividades();
+
+  };
+}
+
+  // PEGAR ATIVIDADE
+  const btnFazer = document.getElementById("btnFazerAtividade");
+
+  if (btnFazer) {
+    btnFazer.onclick = async () => {
+      await update(ref(db, `agendas/${agendaId}/atividades/${id}`), {
+        status: "em_andamento",
+        responsavel: currentUser.uid,
+        responsavelNome: currentUser.email,
+      });
+
+      modal.remove();
+
+      renderizarTodasAtividades();
+    };
+  }
+
+  // CONCLUIR
+  const btnConcluir = document.getElementById("btnConcluirAtividade");
+
+  if (btnConcluir) {
+    btnConcluir.onclick = async () => {
+      await update(ref(db, `agendas/${agendaId}/atividades/${id}`), {
         status: "concluida",
       });
 
-      abrirAtividades();
+      modal.remove();
+
+      renderizarTodasAtividades();
     };
   }
+
+  // =========================
+// COMENTÁRIOS
+// =========================
+
+// =========================
+// COMENTÁRIOS
+// =========================
+
+const comentariosRef = ref(
+  db,
+  `agendas/${agendaId}/atividades/${id}/comentarios`
+);
+
+const listaComentarios =
+  document.getElementById("listaComentarios");
+
+// TEMPO REAL
+onValue(comentariosRef, (snapshot) => {
+
+  listaComentarios.innerHTML = "";
+
+  if (!snapshot.exists()) {
+
+    listaComentarios.innerHTML = `
+      <p class="sem-comentarios">
+        Nenhum comentário ainda.
+      </p>
+    `;
+
+    return;
+  }
+
+  const comentarios = snapshot.val();
+
+  Object.entries(comentarios)
+.sort((a, b) => a[1].data - b[1].data)
+.forEach(([comentarioId, comentario]) => {
+
+    const div = document.createElement("div");
+
+    div.classList.add("card-comentario");
+
+   div.innerHTML = `
+
+  <div class="topo-comentario">
+
+    <div class="info-comentario">
+
+      <div class="nome-comentario">
+        ${comentario.nome}
+      </div>
+
+      <div class="data-comentario">
+        ${new Date(comentario.data).toLocaleString()}
+      </div>
+
+    </div>
+
+    <div class="menu-comentario">
+
+      <button class="btn-menu-comentario">
+        ⋮
+      </button>
+
+      <div class="dropdown-comentario">
+
+        <button class="editar-comentario">
+          Editar mensagem
+        </button>
+
+        <button class="excluir-comentario">
+          Excluir
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="texto-comentario">
+    ${comentario.texto}
+  </div>
+
+  <button class="responder-comentario">
+    Responder
+  </button>
+
+  <div class="respostas-comentario">
+
+    ${
+      comentario.respostas
+        ? Object.values(comentario.respostas)
+            .map((r) => `
+
+              <div class="card-resposta">
+
+                <div class="nome-comentario">
+                  ${r.nome}
+                </div>
+
+                <div class="data-comentario">
+                  ${new Date(r.data).toLocaleString()}
+                </div>
+
+                <div class="texto-comentario">
+                  ${r.texto}
+                </div>
+
+              </div>
+
+            `)
+            .join("")
+        : ""
+    }
+
+  </div>
+
+`;
+
+    const responderBtn =
+      div.querySelector(".responder-comentario");
+
+    responderBtn.onclick = () => {
+
+      const input =
+        document.getElementById("inputComentario");
+
+      input.value =
+        `@${comentario.nome} `;
+
+      input.focus();
+    };
+
+    const menuBtn =
+  div.querySelector(".btn-menu-comentario");
+
+const dropdown =
+  div.querySelector(".dropdown-comentario");
+
+menuBtn.onclick = (ev) => {
+
+  ev.stopPropagation();
+
+  dropdown.classList.toggle("ativo");
+
+};
+
+document.addEventListener("click", () => {
+  dropdown.classList.remove("ativo");
+});
+
+// EDITAR
+const editarBtn =
+  div.querySelector(".editar-comentario");
+
+editarBtn.onclick = async () => {
+
+  const novoTexto = prompt(
+    "Editar comentário:",
+    comentario.texto
+  );
+
+  if (!novoTexto) return;
+
+  await update(
+    ref(
+      db,
+      `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`
+    ),
+    {
+      texto: novoTexto,
+    }
+  );
+
+};
+
+// EXCLUIR
+const excluirBtn =
+  div.querySelector(".excluir-comentario");
+
+excluirBtn.onclick = async () => {
+
+  const confirmar = confirm(
+    "Excluir comentário?"
+  );
+
+  if (!confirmar) return;
+
+  await remove(
+    ref(
+      db,
+      `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`
+    )
+  );
+
+};
+
+    listaComentarios.appendChild(div);
+
+  });
+
+});
+
+// ENVIAR COMENTÁRIO
+document.getElementById(
+  "btnEnviarComentario"
+).onclick = async () => {
+
+  const input =
+    document.getElementById("inputComentario");
+
+  const texto = input.value.trim();
+
+  if (!texto) return;
+
+  const nome =
+    currentUser.email.split("@")[0];
+
+  // RESPOSTA
+  if (texto.startsWith("@")) {
+
+    const comentariosSnap =
+      await get(comentariosRef);
+
+    if (comentariosSnap.exists()) {
+
+      const comentarios =
+        comentariosSnap.val();
+
+      for (let comentarioId in comentarios) {
+
+        const comentario =
+          comentarios[comentarioId];
+
+        if (
+          texto.startsWith(
+            `@${comentario.nome}`
+          )
+        ) {
+
+          await push(
+            ref(
+              db,
+              `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}/respostas`
+            ),
+            {
+              nome,
+              texto,
+              data: Date.now(),
+            }
+          );
+
+          input.value = "";
+
+          return;
+        }
+
+      }
+
+    }
+
+  }
+
+  // COMENTÁRIO NORMAL
+  await push(comentariosRef, {
+    nome,
+    texto,
+    data: Date.now(),
+  });
+
+  // MENÇÕES
+  const marcacoes =
+    texto.match(/@(\w+)/g);
+
+  if (marcacoes) {
+
+    const membrosSnap = await get(
+      ref(db, `agendas/${agendaId}/membros`)
+    );
+
+    if (membrosSnap.exists()) {
+
+      const membros = membrosSnap.val();
+
+      for (let uid in membros) {
+
+        const membro = membros[uid];
+
+        const nomeMembro =
+          (membro.email || "")
+            .split("@")[0]
+            .toLowerCase();
+
+        marcacoes.forEach(async (m) => {
+
+          const marcado =
+            m.replace("@", "")
+              .toLowerCase();
+
+          if (nomeMembro === marcado) {
+
+            await push(
+              ref(
+                db,
+                `usuarios/${uid}/notificacoes`
+              ),
+              {
+                texto:
+                  `💬 ${currentUser.email.split("@")[0]} mencionou você em uma atividade`,
+
+                tipo: "comentario",
+
+                lida: false,
+
+                data: Date.now(),
+              }
+            );
+
+          }
+
+        });
+
+      }
+
+    }
+
+  }
+
+  input.value = "";
+
+};
+
 }
+
 
 //===================Código DA AGENDA ================
 
@@ -2106,47 +2827,31 @@ async function abrirMembros() {
 
     const membro = membros[uid];
 
-    let pendentes = 0;
     let andamento = 0;
     let concluidas = 0;
 
     let score = 0;
 
+    let nomesConcluidas = [];
+    let nomesAndamento = [];
+
     // percorre atividades
-    for (let ano in atividades) {
-      for (let mes in atividades[ano]) {
-        for (let atvId in atividades[ano][mes]) {
-          const atv = atividades[ano][mes][atvId];
 
-          const status = atv.membros?.[uid]?.status;
+    for (let atvId in atividades) {
+      const atv = atividades[atvId];
 
-          const hoje = new Date();
-          const prazo = atv.prazo ? new Date(atv.prazo) : null;
-
-          // concluída
-          if (status === "concluida") {
-            concluidas++;
-          }
-
-          // passou prazo
-          else if (prazo && hoje > prazo) {
-            pendentes++;
-          }
-
-          // ainda executando
-          else if (status === "em_execucao") {
-            andamento++;
-          }
-
-          // nunca abriu
-          else {
-            pendentes++;
-          }
+      if (atv.responsavel === uid) {
+        if (atv.status === "concluida") {
+          concluidas++;
+          nomesConcluidas.push(atv.nome);
+        } else if (atv.status === "em_andamento") {
+          andamento++;
+          nomesAndamento.push(atv.nome);
         }
       }
     }
 
-    score = concluidas * 5 + andamento * 2 - pendentes;
+    score = concluidas * 5 + andamento * 2;
     const div = document.createElement("div");
 
     div.classList.add("card-membro");
@@ -2158,7 +2863,7 @@ async function abrirMembros() {
     <div class="member-info">
 
       <img
-        src="${membro.foto || "https://i.imgur.com/placeholder.png"}"
+        src="${membro.foto || "https://ui-avatars.com/api/?name=User"}"
         class="avatar"
       />
 
@@ -2191,9 +2896,7 @@ async function abrirMembros() {
           🟡 ${andamento} em execução
         </span>
 
-        <span class="status pendente">
-          ❌ ${pendentes} pendentes
-        </span>
+        
 
       </div>
     `
@@ -2201,6 +2904,32 @@ async function abrirMembros() {
   }
 <div class="ranking">
   ⭐ Score: ${score}
+</div>
+
+<div class="lista-status-membro">
+
+  <p>
+    <strong>Em andamento:</strong>
+  </p>
+
+  ${
+    nomesAndamento.length
+      ? nomesAndamento.map((n) => `<small>• ${n}</small>`).join("<br>")
+      : "<small>Nenhuma</small>"
+  }
+
+  <br><br>
+
+  <p>
+    <strong>Concluídas:</strong>
+  </p>
+
+  ${
+    nomesConcluidas.length
+      ? nomesConcluidas.map((n) => `<small>• ${n}</small>`).join("<br>")
+      : "<small>Nenhuma</small>"
+  }
+
 </div>
 
 ${
@@ -2255,6 +2984,21 @@ function criarBotaoTema() {
   };
 
   document.body.appendChild(botao);
+}
+
+function destacarMencoes(texto) {
+
+  return texto.replace(
+
+    /@(\w+)/g,
+
+    `
+      <span class="mencao-comentario">
+        @$1
+      </span>
+    `
+  );
+
 }
 
 function atualizarIconeTema(botao) {
@@ -2354,7 +3098,7 @@ async function abrirLixeira() {
     }
 
     const diasRestantes = Math.ceil(
-      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24),
+      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24)
     );
 
     const div = document.createElement("div");
@@ -2394,23 +3138,23 @@ async function abrirLixeira() {
         await set(
           ref(
             db,
-            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`,
+            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`
           ),
-          item.dados,
+          item.dados
         );
       }
 
       if (item.tipo === "anotacao") {
         await set(
           ref(db, `anotacoes/${item.dados.uid}/${agendaId}/${item.dados.id}`),
-          item.dados,
+          item.dados
         );
       }
 
       if (item.tipo === "tarefa") {
         await set(
           ref(db, `tarefas/${item.dados.uid}/${agendaId}/${item.dados.id}`),
-          item.dados,
+          item.dados
         );
       }
 

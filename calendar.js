@@ -1550,6 +1550,8 @@ if (btnTarefas) {
 }
 
 async function abrirTarefas() {
+
+
   conteudo.innerHTML = `
     <header class="header">
       <button id="voltar">⬅</button>
@@ -1574,45 +1576,83 @@ async function abrirTarefas() {
   };
 }
 
-function abrirEditorTarefa(lista = [], id = null) {
+
+function abrirEditorTarefa(
+  lista = [],
+  id = null,
+  tituloAtual = ""
+) {
+
   conteudo.innerHTML = `
     <header class="header">
       <button id="voltar">⬅</button>
-      <h2 style="margin:auto;">Nova Lista</h2>
-      <button id="salvarLista">Salvar</button>
+
+      <h2 style="margin:auto;">
+        ${id ? "Editar Lista" : "Nova Lista"}
+      </h2>
+
+      <button id="salvarLista">
+        Salvar
+      </button>
     </header>
 
     <div class="editor-tarefa">
+
+      <input
+        type="text"
+        id="tituloLista"
+        placeholder="Título da lista..."
+        value="${tituloAtual}"
+      >
+
       <div id="itensLista"></div>
 
-      <button id="addItem">+ Adicionar tarefa</button>
+      <button id="addItem">
+        + Adicionar tarefa
+      </button>
+
     </div>
   `;
 
-  document.getElementById("voltar").onclick = abrirTarefas;
+  document.getElementById("voltar").onclick =
+    abrirTarefas;
 
-  const container = document.getElementById("itensLista");
+  const container =
+    document.getElementById("itensLista");
 
-  function criarItem(texto = "", concluido = false) {
+  function criarItem(
+    texto = "",
+    concluido = false
+  ) {
     const div = document.createElement("div");
+
     div.classList.add("item-tarefa");
 
     div.innerHTML = `
+      <input
+        type="checkbox"
+        ${concluido ? "checked" : ""}
+      >
 
-  <input type="checkbox" ${concluido ? "checked" : ""}>
+      <input
+        type="text"
+        value="${texto}"
+        placeholder="Digite a tarefa..."
+      >
 
-  <input
-    type="text"
-    value="${texto}"
-    placeholder="Digite a tarefa..."
-  >
+      <button class="remover-item">
+        ✕
+      </button>
+    `;
 
-  <span class="estrela-tarefa">⭐</span>
+    const checkbox =
+      div.querySelector("input[type='checkbox']");
 
-`;
+    const input =
+      div.querySelector("input[type='text']");
 
-    const checkbox = div.querySelector("input[type='checkbox']");
-    const input = div.querySelector("input[type='text']");
+    const remover =
+      div.querySelector(".remover-item");
 
     function atualizarVisual() {
       if (checkbox.checked) {
@@ -1623,49 +1663,210 @@ function abrirEditorTarefa(lista = [], id = null) {
     }
 
     checkbox.onchange = atualizarVisual;
+
     atualizarVisual();
+
+    remover.onclick = () => {
+      div.remove();
+    };
 
     container.appendChild(div);
   }
 
-  // carregar existentes
-  lista.forEach((item) => criarItem(item.texto, item.concluido));
+  lista.forEach((item) =>
+    criarItem(item.texto, item.concluido)
+  );
 
-  document.getElementById("addItem").onclick = () => criarItem();
+  document.getElementById("addItem").onclick =
+    () => criarItem();
 
-  document.getElementById("salvarLista").onclick = async () => {
-    const itens = [];
+  document.getElementById("salvarLista").onclick =
+    async () => {
 
-    document.querySelectorAll(".item-tarefa").forEach((div) => {
-      const checkbox = div.querySelector("input[type='checkbox']");
-      const input = div.querySelector("input[type='text']");
+      const titulo =
+        document
+          .getElementById("tituloLista")
+          .value
+          .trim();
 
-      if (input.value.trim()) {
-        itens.push({
-          texto: input.value,
-          concluido: checkbox.checked,
+      const itens = [];
+
+      document
+        .querySelectorAll(".item-tarefa")
+        .forEach((div) => {
+
+          const checkbox =
+            div.querySelector(
+              "input[type='checkbox']"
+            );
+
+          const input =
+            div.querySelector(
+              "input[type='text']"
+            );
+
+          if (input.value.trim()) {
+            itens.push({
+              texto: input.value,
+              concluido: checkbox.checked,
+            });
+          }
         });
+
+      if (!titulo) {
+        alert("Digite um título!");
+        return;
       }
-    });
 
-    if (itens.length === 0) {
-      alert("Adicione pelo menos uma tarefa!");
-      return;
-    }
+      if (itens.length === 0) {
+        alert(
+          "Adicione pelo menos uma tarefa!"
+        );
+        return;
+      }
 
-    if (id) {
-      await update(ref(db, `tarefas/${currentUser.uid}/${agendaId}/${id}`), {
-        itens: itens,
-      });
-    } else {
-      await push(ref(db, `tarefas/${currentUser.uid}/${agendaId}`), {
-        itens: itens,
-        data: Date.now(),
-      });
-    }
+      if (id) {
 
-    abrirTarefas();
+        await update(
+          ref(
+            db,
+            `tarefas/${currentUser.uid}/${agendaId}/${id}`
+          ),
+          {
+            titulo,
+            itens,
+          }
+        );
+
+      } else {
+
+        await push(
+          ref(
+            db,
+            `tarefas/${currentUser.uid}/${agendaId}`
+          ),
+          {
+            titulo,
+            itens,
+            data: Date.now(),
+          }
+        );
+
+      }
+
+      abrirTarefas();
+    };
+}
+
+console.log("FUNÇÃO CARREGADA");
+
+async function renderizarListasTarefas() {
+  const lista = document.getElementById("listaTarefas");
+
+  lista.innerHTML = "";
+
+  const tarefasRef = ref(
+    db,
+    `tarefas/${currentUser.uid}/${agendaId}`
+  );
+
+  onValue(tarefasRef, (snapshot) => {
+    lista.innerHTML = "";
+
+    snapshot.forEach((child) => {
+      const dados = child.val();
+
+      const total = dados.itens?.length || 0;
+
+      const concluidas =
+        dados.itens?.filter((i) => i.concluido).length || 0;
+
+      const div = document.createElement("div");
+
+      div.classList.add("card-tarefa");
+
+      div.innerHTML = `
+        <div class="topo-card-tarefa">
+
+          <div>
+            <h3>
+              ${dados.titulo || "Lista sem título"}
+            </h3>
+
+            <span class="contador-tarefa">
+              ${concluidas}/${total} concluídas
+            </span>
+          </div>
+
+          <button class="btn-excluir-lista">
+            🗑
+          </button>
+
+        </div>
+
+        <div class="preview-tarefas">
+          ${
+            dados.itens
+              .slice(0, 3)
+              .map(
+                (item) => `
+                <div class="preview-item">
+                  ${item.concluido ? "✅" : "⭕"}
+                  <span>${item.texto}</span>
+                </div>
+              `
+              )
+              .join("")
+          }
+        </div>
+      `;
+
+      div.onclick = () => {
+        abrirEditorTarefa(
+          dados.itens,
+          child.key,
+          dados.titulo || ""
+        );
+      };
+
+      div
+  .querySelector(".btn-excluir-lista")
+  .onclick = async (e) => {
+
+    e.stopPropagation();
+
+    const confirmado = confirm(
+      "Excluir esta lista?"
+    );
+
+    if (!confirmado) return;
+
+    await moverParaLixeira(
+      "tarefa",
+      {
+        uid: currentUser.uid,
+
+        id: child.key,
+
+        titulo: dados.titulo || "Lista",
+
+        itens: dados.itens || [],
+
+        data: dados.data || Date.now()
+      }
+    );
+
+    await remove(
+      ref(
+        db,
+        `tarefas/${currentUser.uid}/${agendaId}/${child.key}`
+      )
+    );
   };
+
+      lista.appendChild(div);
+    });
+  });
 }
 
 // ================== ATIVIDADE ==================

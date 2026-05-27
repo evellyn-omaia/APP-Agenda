@@ -56,8 +56,8 @@ onAuthStateChanged(auth, async (user) => {
   agendaId = data.agendaId;
 
   carregarCalendario();
-
   ouvirNotificacoes();
+  criarBotaoNotificacao();
 });
 
 const conteudo = document.getElementById("conteudo");
@@ -79,82 +79,154 @@ function ouvirNotificacoes() {
   const notificacoesRef = ref(db, `usuarios/${currentUser.uid}/notificacoes`);
 
   onValue(notificacoesRef, (snapshot) => {
-    const el = document.getElementById("notificacoes");
-
-    if (!el) return;
-
     if (!snapshot.exists()) {
-      el.innerHTML = `
-        <div class="sem-notificacao">
-          Nenhuma notificação
-        </div>
-      `;
-
+      notificacoes = [];
+      atualizarBotaoNotificacao();
       return;
     }
 
     const dados = snapshot.val();
 
-    const lista = Object.entries(dados)
+    notificacoes = Object.entries(dados)
       .map(([id, n]) => ({
         id,
         ...n,
       }))
-      .sort((a, b) => b.data - a.data)
-      .slice(0, 8);
+      .sort((a, b) => b.data - a.data);
 
-    el.innerHTML = lista
-      .map((n) => {
-        const recomendada = n.tipo === "recomendacao";
-
-        return `
-          <div class="
-            card-notificacao
-            ${recomendada ? "notif-destaque" : ""}
-          ">
-
-            <div class="notif-icon">
-              ${recomendada ? "⭐" : "🔔"}
-            </div>
-
-            <div class="notif-info">
-
-              <div class="notif-texto">
-                ${n.texto}
-              </div>
-
-              <small class="notif-data">
-                ${new Date(n.data).toLocaleString()}
-              </small>
-
-            </div>
-
-          </div>
-        `;
-      })
-      .join("");
+    atualizarBotaoNotificacao();
   });
+}
+
+function criarBotaoNotificacao() {
+  if (document.getElementById("btnNotificacoes")) return;
+
+  const btn = document.createElement("button");
+  btn.id = "btnNotificacoes";
+  btn.innerHTML = `
+    🔔
+    <span id="contadorNotificacoes"></span>
+  `;
+
+  document.body.appendChild(btn);
+
+  btn.onclick = abrirNotificacoes;
+}
+
+function atualizarBotaoNotificacao() {
+  criarBotaoNotificacao();
+
+  const contador = document.getElementById("contadorNotificacoes");
+  if (!contador) return;
+
+  const naoLidas = notificacoes.filter((n) => !n.lida).length;
+
+  if (naoLidas > 0) {
+    contador.style.display = "flex";
+    contador.innerText = naoLidas;
+  } else {
+    contador.style.display = "none";
+  }
+}
+
+function abrirNotificacoes() {
+  conteudo.innerHTML = `
+    <header class="header">
+      <button id="voltar">⬅</button>
+      <h2>Notificações</h2>
+    </header>
+
+    <div class="lista-notificacoes"></div>
+  `;
+
+  document.getElementById("voltar").onclick = carregarCalendario;
+
+  const lista = document.querySelector(".lista-notificacoes");
+
+  if (notificacoes.length === 0) {
+    lista.innerHTML = `<p class="sem-notificacao">Nenhuma notificação</p>`;
+    return;
+  }
+
+  lista.innerHTML = notificacoes
+    .map((n) => {
+      const recomendada = n.tipo === "recomendacao";
+
+      return `
+        <div class="card-notificacao ${recomendada ? "notif-destaque" : ""}" data-id="${n.id}">
+          <div class="notif-icon">${recomendada ? "⭐" : "🔔"}</div>
+
+          <div class="notif-info">
+            <div class="notif-texto">${n.texto}</div>
+            <small class="notif-data">
+              ${new Date(n.data).toLocaleString()}
+            </small>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  document.querySelectorAll(".card-notificacao").forEach((card) => {
+    card.onclick = async () => {
+      const id = card.dataset.id;
+      const notificacao = notificacoes.find((n) => n.id === id);
+
+      if (!notificacao) return;
+
+      await remove(ref(db, `usuarios/${currentUser.uid}/notificacoes/${id}`));
+
+      notificacoes = notificacoes.filter((n) => n.id !== id);
+
+      atualizarBotaoNotificacao();
+
+      abrirDestinoNotificacao(notificacao);
+    };
+  });
+}
+
+function abrirDestinoNotificacao(notificacao) {
+  if (notificacao.tipo === "evento" && notificacao.dataKey) {
+    const [ano, mes, dia] = notificacao.dataKey.split("-").map(Number);
+
+    dataAtual = new Date(ano, mes, 1);
+
+    abrirDia(dia, mes, ano);
+    return;
+  }
+
+  if (notificacao.tipo === "atividade" || notificacao.tipo === "recomendacao") {
+    abrirAtividades();
+    return;
+  }
+
+  carregarCalendario();
 }
 
 // ================== CALENDÁRIO ================
 
 function carregarCalendario() {
   conteudo.innerHTML = `
-  <header class="header">
-  <div id="notificacoes"></div>
-    <h1 id="mesAno" class="mes-clickavel"></h1>
-    
-    <div>
-      <button id="prevMes">◀</button>
-      <button id="proxMes">▶</button>
+  <div class="tela-calendario">
+
+    <header class="header">
+      <div class="header-esquerda">
+        <button id="btnHoje">📍 Hoje</button>
+        <h1 id="mesAno" class="mes-clickavel"></h1>
+      </div>
+
+      <div class="header-direita">
+        <button id="prevMes">◀</button>
+        <button id="proxMes">▶</button>
+      </div>
+    </header>
+
+    <div id="calendario" class="calendario"></div>
+
+    <div id="previewDia" class="preview-dia">
+      <p>Selecione um dia para ver os eventos</p>
     </div>
-  </header>
 
-  <div id="calendario" class="calendario"></div>
-
-  <!-- 👇 NOVA ÁREA -->
-  <div id="previewDia" class="preview-dia">
-    <p>Selecione um dia para ver os eventos</p>
   </div>
 `;
 
@@ -172,6 +244,18 @@ function carregarCalendario() {
   document.getElementById("proxMes").onclick = () => {
     dataAtual.setMonth(dataAtual.getMonth() + 1);
     renderizarCalendario();
+  };
+
+  document.getElementById("btnHoje").onclick = () => {
+    dataAtual = new Date();
+
+    renderizarCalendario();
+
+    mostrarPreviewDia(
+      dataAtual.getDate(),
+      dataAtual.getMonth(),
+      dataAtual.getFullYear(),
+    );
   };
 }
 async function renderizarCalendario() {
@@ -338,7 +422,7 @@ function abrirSeletorData() {
           >
             ${m}
           </option>
-        `
+        `,
           )
           .join("")}
 
@@ -406,13 +490,19 @@ async function buscarEventosDoDia(ano, mes, dia) {
 
 async function abrirDia(dia, mes, ano) {
   conteudo.innerHTML = `
+  <div class="tela-dia-eventos">
+
     <header class="header">
       <button id="voltar">⬅</button>
       <h2>${dia}/${mes + 1}/${ano}</h2>
     </header>
 
-    <div id="horas"></div>
-  `;
+    <div class="scroll-dia-eventos">
+      <div id="horas"></div>
+    </div>
+
+  </div>
+`;
 
   document.getElementById("voltar").onclick = carregarCalendario;
 
@@ -489,20 +579,17 @@ async function abrirDia(dia, mes, ano) {
       if (e.tag === "pessoal") {
         eventoDiv.style.borderLeft = "5px solid #a855f7";
       }
-      if (e.anexo) {
-        eventoDiv.innerHTML += `
-    <br>
-    <img
-      src="${e.anexo}"
-      width="80"
-      style="
-        margin-top:10px;
-        border-radius:10px;
-      "
-    >
-  `;
+      const anexos = pegarAnexosEvento(e);
+
+      if (anexos.length > 0) {
+        eventoDiv.innerHTML += renderizarAnexos(anexos, "pequeno");
       }
+      eventoDiv.onclick = (ev) => {
+        ev.stopPropagation();
+        abrirDetalhesEvento(e, dia, mes, ano);
+      };
       hora.appendChild(eventoDiv);
+      ativarCliqueAnexos();
 
       const editarBtn = eventoDiv.querySelector(".editar-evento");
       const excluirBtn = eventoDiv.querySelector(".excluir-evento");
@@ -531,7 +618,7 @@ async function abrirDia(dia, mes, ano) {
           });
 
           await remove(
-            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`)
+            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`),
           );
 
           abrirDia(dia, mes, ano);
@@ -556,7 +643,7 @@ async function toggleFavorito(evento, ano, mes, dia) {
       ref(db, `agendas/${agendaId}/eventos/${dataKey}/${evento.id}`),
       {
         favorito: novoValor,
-      }
+      },
     );
 
     evento.favorito = novoValor;
@@ -568,10 +655,133 @@ async function toggleFavorito(evento, ano, mes, dia) {
   }
 }
 
-function editarEvento(evento, dia, mes, ano) {
+function pegarAnexosEvento(evento) {
+  if (Array.isArray(evento.anexos)) return evento.anexos;
+
+  if (evento.anexos) {
+    return [
+      {
+        nome: "Anexo",
+        url: evento.anexos,
+        tipo: "image",
+      },
+    ];
+  }
+
+  return [];
+}
+
+async function converterArquivosParaBase64(files) {
+  const arquivos = Array.from(files);
+
+  return Promise.all(
+    arquivos.map((file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+          resolve({
+            nome: file.name,
+            url: e.target.result,
+            tipo: file.type,
+          });
+        };
+
+        reader.readAsDataURL(file);
+      });
+    }),
+  );
+}
+
+function renderizarAnexos(anexos, tamanho = "pequeno") {
+  if (!anexos || anexos.length === 0) return "";
+
+  return `
+    <div class="lista-anexos ${tamanho}">
+      ${anexos
+        .map((anexo) => {
+          const ehImagem =
+            anexo.tipo?.startsWith("image") ||
+            anexo.url?.startsWith("data:image");
+
+          if (ehImagem) {
+            return `
+              <img 
+                src="${anexo.url}" 
+                class="img-anexo ${tamanho}"
+                data-url="${anexo.url}"
+                title="${anexo.nome || "Imagem"}"
+              >
+            `;
+          }
+
+          return `
+            <div
+              class="arquivo-anexo"
+              data-url="${anexo.url}"
+            >
+              📎 ${anexo.nome || "Arquivo"}
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function ativarCliqueAnexos() {
+  document.querySelectorAll(".img-anexo").forEach((img) => {
+    img.onclick = (ev) => {
+      ev.stopPropagation();
+
+      abrirVisualizadorAnexo(img.dataset.url);
+    };
+  });
+
+  document.querySelectorAll(".arquivo-anexo").forEach((arquivo) => {
+    arquivo.onclick = (ev) => {
+      ev.stopPropagation();
+
+      window.open(arquivo.dataset.url, "_blank");
+    };
+  });
+}
+
+function abrirVisualizadorAnexo(url) {
   const modal = document.createElement("div");
 
   modal.classList.add("modal");
+
+  modal.innerHTML = `
+    <div class="visualizador-anexo">
+
+      <button id="fecharVisualizador">
+        ✕
+      </button>
+
+      <img src="${url}" class="img-visualizador">
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("fecharVisualizador").onclick = () => {
+    modal.remove();
+  };
+
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  };
+}
+
+function editarEvento(evento, dia, mes, ano) {
+  const modal = document.createElement("div");
+  modal.classList.add("modal");
+
+  let anexosAtuais = pegarAnexosEvento(evento);
 
   modal.innerHTML = `
     <div class="modal-conteudo">
@@ -595,6 +805,11 @@ function editarEvento(evento, dia, mes, ano) {
         ⭐ Favorito
       </label>
 
+      <label>Adicionar novos anexos:</label>
+      <input type="file" id="editAnexos" multiple>
+
+      <div id="anexosAtuais"></div>
+
       <button id="salvarEdicao">
         Salvar
       </button>
@@ -608,6 +823,51 @@ function editarEvento(evento, dia, mes, ano) {
 
   document.body.appendChild(modal);
 
+  function atualizarListaAnexosEdicao() {
+    const area = document.getElementById("anexosAtuais");
+
+    if (anexosAtuais.length === 0) {
+      area.innerHTML = `<p class="sem-anexo">Nenhum anexo</p>`;
+      return;
+    }
+
+    area.innerHTML = `
+      <h4>Anexos atuais:</h4>
+
+      ${anexosAtuais
+        .map((anexo, index) => {
+          const ehImagem =
+            anexo.tipo?.startsWith("image") ||
+            anexo.url?.startsWith("data:image");
+
+          return `
+            <div class="item-anexo-edicao">
+              ${
+                ehImagem
+                  ? `<img src="${anexo.url}" class="img-anexo pequeno">`
+                  : `<span>📎 ${anexo.nome || "Anexo"}</span>`
+              }
+
+              <button class="remover-anexo" data-index="${index}">
+                Remover
+              </button>
+            </div>
+          `;
+        })
+        .join("")}
+    `;
+
+    document.querySelectorAll(".remover-anexo").forEach((btn) => {
+      btn.onclick = () => {
+        const index = Number(btn.dataset.index);
+        anexosAtuais.splice(index, 1);
+        atualizarListaAnexosEdicao();
+      };
+    });
+  }
+
+  atualizarListaAnexosEdicao();
+
   document.getElementById("cancelarEdicao").onclick = () => {
     modal.remove();
   };
@@ -615,15 +875,20 @@ function editarEvento(evento, dia, mes, ano) {
   document.getElementById("salvarEdicao").onclick = async () => {
     const dataKey = `${ano}-${mes}-${dia}`;
 
+    const novosFiles = document.getElementById("editAnexos").files;
+    const novosAnexos = await converterArquivosParaBase64(novosFiles);
+
+    const anexosFinais = [...anexosAtuais, ...novosAnexos];
+
     await update(
       ref(db, `agendas/${agendaId}/eventos/${dataKey}/${evento.id}`),
       {
         nome: document.getElementById("editNome").value,
-
         descricao: document.getElementById("editDescricao").value,
-
         favorito: document.getElementById("editFavorito").checked,
-      }
+        anexos: anexosFinais,
+        anexo: null,
+      },
     );
 
     modal.remove();
@@ -649,6 +914,8 @@ function adicionarEvento(dia, mes, ano, hora) {
   const modal = document.createElement("div");
   modal.classList.add("modal");
 
+  let anexosSelecionados = [];
+
   modal.innerHTML = `
     <div class="modal-conteudo">
       <h2>Novo Evento</h2>
@@ -670,8 +937,11 @@ function adicionarEvento(dia, mes, ano, hora) {
   <input type="checkbox" id="favoritoEvento">
   ⭐ Favoritar evento
 </label>
-<label>Anexo:</label>
-<input type="file" id="anexoEvento">
+<label>Anexos:</label>
+
+<div id="previewAnexosEvento" class="preview-anexos-evento"></div>
+
+<input type="file" id="anexoEvento" multiple>
 
 
       <div class="botoes">
@@ -683,6 +953,56 @@ function adicionarEvento(dia, mes, ano, hora) {
 
   document.body.appendChild(modal);
 
+  const inputAnexo = document.getElementById("anexoEvento");
+  const previewAnexos = document.getElementById("previewAnexosEvento");
+
+  function atualizarPreviewAnexos() {
+    if (anexosSelecionados.length === 0) {
+      previewAnexos.innerHTML = "";
+      return;
+    }
+
+    previewAnexos.innerHTML = anexosSelecionados
+      .map((anexo, index) => {
+        const ehImagem =
+          anexo.tipo?.startsWith("image") ||
+          anexo.url?.startsWith("data:image");
+
+        return `
+        <div class="preview-anexo-item">
+          <button class="remover-preview-anexo" data-index="${index}">
+            ✕
+          </button>
+
+          ${
+            ehImagem
+              ? `<img src="${anexo.url}" class="preview-anexo-img">`
+              : `<div class="preview-anexo-arquivo">📎 ${anexo.nome}</div>`
+          }
+        </div>
+      `;
+      })
+      .join("");
+
+    document.querySelectorAll(".remover-preview-anexo").forEach((btn) => {
+      btn.onclick = () => {
+        const index = Number(btn.dataset.index);
+        anexosSelecionados.splice(index, 1);
+        atualizarPreviewAnexos();
+      };
+    });
+  }
+
+  inputAnexo.onchange = async () => {
+    const novosAnexos = await converterArquivosParaBase64(inputAnexo.files);
+
+    anexosSelecionados = [...anexosSelecionados, ...novosAnexos];
+
+    inputAnexo.value = "";
+
+    atualizarPreviewAnexos();
+  };
+
   // fechar
   document.getElementById("fecharModal").onclick = () => {
     modal.remove();
@@ -693,21 +1013,7 @@ function adicionarEvento(dia, mes, ano, hora) {
     const nome = document.getElementById("nomeEvento").value;
     const descricao = document.getElementById("descricaoEvento").value;
 
-    const file = document.getElementById("anexoEvento").files[0];
-
-    let anexo = null;
-
-    if (file) {
-      anexo = await new Promise((resolve) => {
-        const reader = new FileReader();
-
-        reader.onload = (e) => {
-          resolve(e.target.result);
-        };
-
-        reader.readAsDataURL(file);
-      });
-    }
+    let anexos = anexosSelecionados;
 
     if (!nome) {
       alert("Digite um nome!");
@@ -724,35 +1030,31 @@ function adicionarEvento(dia, mes, ano, hora) {
 
       favorito: document.getElementById("favoritoEvento").checked,
 
-      anexo: anexo,
+      anexos: anexos,
 
       tag: document.getElementById("tagEvento").value,
     });
 
-    const membrosSnap = await get(
-  ref(db, `agendas/${agendaId}/membros`)
-);
+    const membrosSnap = await get(ref(db, `agendas/${agendaId}/membros`));
 
-if (membrosSnap.exists()) {
+    if (membrosSnap.exists()) {
+      const membros = membrosSnap.val();
 
-  const membros = membrosSnap.val();
+      for (let uid in membros) {
+        await push(ref(db, `usuarios/${uid}/notificacoes`), {
+          texto: `📅 Novo evento criado: ${nome}`,
+          tipo: "evento",
+          destino: "calendario",
+          dataKey: dataKey,
+          dia: dia,
+          mes: mes,
+          ano: ano,
+          lida: false,
+          data: Date.now(),
+        });
+      }
+    }
 
-  for (let uid in membros) {
-
-    await push(
-      ref(db, `usuarios/${uid}/notificacoes`)
-    , {
-      texto: `📅 Novo evento criado: ${nome}`,
-
-      tipo: "evento",
-
-      lida: false,
-
-      data: Date.now(),
-    });
-  }
-}
-    
     modal.remove();
     abrirDia(dia, mes, ano); // atualiza
   };
@@ -790,20 +1092,90 @@ async function mostrarPreviewDia(dia, mes, ano) {
   }
 
   preview.innerHTML = `
-  <h3>📅 ${dia}/${mes + 1}/${ano}</h3>
+    <h3>📅 ${dia}/${mes + 1}/${ano}</h3>
 
-  ${eventos
-    .map(
-      (e) => `
-    <div class="preview-evento-dia">
-      <strong>${e.hora}:00</strong> - ${e.nome}
-      <br>
-      <small>${e.descricao || ""}</small>
+    ${eventos
+      .map((e) => {
+        const anexos = pegarAnexosEvento(e);
+
+        return `
+          <div class="preview-evento-dia" data-id="${e.id}">
+            <strong>${e.hora}:00</strong> - ${e.nome}
+            <br>
+            <small>${e.descricao || ""}</small>
+
+            ${renderizarAnexos(anexos, "pequeno")}
+          </div>
+        `;
+      })
+      .join("")}
+  `;
+
+  document.querySelectorAll(".preview-evento-dia").forEach((card) => {
+    card.onclick = () => {
+      const evento = eventos.find((e) => e.id === card.dataset.id);
+
+      if (evento) {
+        abrirDetalhesEvento(evento, dia, mes, ano);
+      }
+    };
+  });
+
+  ativarCliqueAnexos();
+}
+
+function abrirDetalhesEvento(evento, dia, mes, ano) {
+  const anexos = pegarAnexosEvento(evento);
+
+  const modal = document.createElement("div");
+  modal.classList.add("modal");
+
+  modal.innerHTML = `
+    <div class="modal-conteudo detalhe-evento-modal">
+
+      <h2>${evento.nome}</h2>
+
+      <p>
+        <strong>Data:</strong> ${dia}/${mes + 1}/${ano}
+      </p>
+
+      <p>
+        <strong>Horário:</strong> ${evento.hora}:00
+      </p>
+
+      <p>
+        <strong>Descrição:</strong><br>
+        ${evento.descricao || "Sem descrição"}
+      </p>
+
+      <p>
+        <strong>Categoria:</strong> ${evento.tag || "Sem categoria"}
+      </p>
+
+      ${
+        evento.favorito
+          ? `<p><strong>Favorito:</strong> ⭐ Sim</p>`
+          : `<p><strong>Favorito:</strong> Não</p>`
+      }
+
+      <div>
+        <strong>Anexos:</strong>
+        ${anexos.length > 0 ? renderizarAnexos(anexos, "grande") : "<p>Nenhum anexo</p>"}
+      </div>
+
+      <button id="fecharDetalhesEvento">
+        Fechar
+      </button>
+
     </div>
-  `
-    )
-    .join("")}
-`;
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("fecharDetalhesEvento").onclick = () => {
+    modal.remove();
+  };
+  ativarCliqueAnexos();
 }
 
 // ================== MENU ==================
@@ -847,7 +1219,7 @@ async function buscarEventosFiltrados(ano, mes, termo) {
       let filtrados = eventos.filter(
         (e) =>
           e.nome.toLowerCase().includes(termo.toLowerCase()) ||
-          String(diaDB).includes(termo)
+          String(diaDB).includes(termo),
       );
 
       if (filtrados.length > 0) {
@@ -865,17 +1237,37 @@ function ativarBusca() {
 
   if (!buscarBtn || !inputBusca) return;
 
-  buscarBtn.onclick = () => {
+  buscarBtn.onclick = (ev) => {
+    ev.stopPropagation();
+
     if (inputBusca.style.display === "none") {
       inputBusca.style.display = "block";
       inputBusca.focus();
     } else {
-      inputBusca.style.display = "none";
-      inputBusca.value = "";
-      filtroBusca = "";
-      renderizarCalendario();
+      fecharPesquisa();
     }
   };
+
+  function fecharPesquisa() {
+    inputBusca.style.display = "none";
+    inputBusca.value = "";
+    filtroBusca = "";
+    renderizarCalendario();
+  }
+
+  inputBusca.onclick = (ev) => {
+    ev.stopPropagation();
+  };
+
+  document.addEventListener("click", (ev) => {
+    if (
+      inputBusca.style.display === "block" &&
+      !buscarBtn.contains(ev.target) &&
+      ev.target !== inputBusca
+    ) {
+      fecharPesquisa();
+    }
+  });
 
   let timer;
 
@@ -1070,6 +1462,7 @@ ${
       if (agendaId) {
         await update(ref(db, `agendas/${agendaId}/membros/${user.uid}`), {
           foto: imagemBase64,
+          nome: user.displayName || user.email?.split("@")[0] || "Usuário",
         });
       }
 
@@ -1083,7 +1476,7 @@ ${
   // TROCAR CONTA
   // =========================
   document.getElementById("mudarConta").onclick = () => {
-    window.location.href = "login.html";
+    window.location.href = "index.html";
   };
 
   // =========================
@@ -1095,7 +1488,7 @@ ${
   if (sairAgendaBtn) {
     sairAgendaBtn.onclick = async () => {
       const confirmar = confirm(
-        "Deseja realmente sair da agenda?\n\nVocê perderá suas informações da agenda."
+        "Deseja realmente sair da agenda?\n\nVocê perderá suas informações da agenda.",
       );
 
       if (!confirmar) return;
@@ -1136,7 +1529,7 @@ ${
   if (excluirAgendaBtn) {
     excluirAgendaBtn.onclick = async () => {
       const confirmar = confirm(
-        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados."
+        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados.",
       );
 
       if (!confirmar) return;
@@ -1321,7 +1714,7 @@ async function renderizarAnotacoes() {
   lista.innerHTML = "";
 
   const snapshot = await get(
-    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`)
+    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`),
   );
 
   if (!snapshot.exists()) return;
@@ -1461,8 +1854,6 @@ async function abrirPrincipaisEventos() {
       abrirDetalhePrincipalEvento(e);
     };
 
-
-
     lista.appendChild(card);
   });
 }
@@ -1500,16 +1891,14 @@ function abrirDetalhePrincipalEvento(evento) {
         ${evento.descricao || "Sem descrição"}
       </div>
 
-      ${
-        evento.anexo
-          ? `
-          <img
-            src="${evento.anexo}"
-            class="imagem-evento-detalhe"
-          >
-        `
-          : ""
-      }
+      <div>
+  <strong>Anexos:</strong>
+  ${
+    pegarAnexosEvento(evento).length > 0
+      ? renderizarAnexos(pegarAnexosEvento(evento), "grande")
+      : "<p>Nenhum anexo</p>"
+  }
+</div>
 
       <div class="acoes-evento-detalhe">
 
@@ -1529,6 +1918,8 @@ function abrirDetalhePrincipalEvento(evento) {
   `;
 
   document.body.appendChild(modal);
+
+  ativarCliqueAnexos();
 
   document.getElementById("fecharDetalheEvento").onclick = () => {
     modal.remove();
@@ -1550,20 +1941,24 @@ if (btnTarefas) {
 }
 
 async function abrirTarefas() {
-
-
   conteudo.innerHTML = `
-    <header class="header">
-      <button id="voltar">⬅</button>
-      <h2 style="margin:auto;">Lista de Tarefas</h2>
-    </header>
+    <div class="tela-tarefas">
 
-    <div class="area-anotacoes">
-      <div id="listaTarefas" class="lista-anotacoes"></div>
+      <header class="header">
+        <button id="voltar">⬅</button>
+        <h2 style="margin:auto;">Lista de Tarefas</h2>
+      </header>
+
+      <div class="scroll-tarefas">
+        <div class="area-anotacoes">
+          <div id="listaTarefas" class="lista-anotacoes"></div>
+        </div>
+      </div>
 
       <div class="nova-anotacao" id="novaTarefa">
         +
       </div>
+
     </div>
   `;
 
@@ -1576,14 +1971,10 @@ async function abrirTarefas() {
   };
 }
 
-
-function abrirEditorTarefa(
-  lista = [],
-  id = null,
-  tituloAtual = ""
-) {
-
+function abrirEditorTarefa(lista = [], id = null, tituloAtual = "") {
   conteudo.innerHTML = `
+  <div class="tela-editor-tarefa">
+
     <header class="header">
       <button id="voltar">⬅</button>
 
@@ -1596,34 +1987,33 @@ function abrirEditorTarefa(
       </button>
     </header>
 
-    <div class="editor-tarefa">
+    <div class="scroll-editor-tarefa">
+      <div class="editor-tarefa">
 
-      <input
-        type="text"
-        id="tituloLista"
-        placeholder="Título da lista..."
-        value="${tituloAtual}"
-      >
+        <input
+          type="text"
+          id="tituloLista"
+          placeholder="Título da lista..."
+          value="${tituloAtual}"
+        >
 
-      <div id="itensLista"></div>
+        <div id="itensLista"></div>
 
-      <button id="addItem">
-        + Adicionar tarefa
-      </button>
+        <button id="addItem">
+          + Adicionar tarefa
+        </button>
 
+      </div>
     </div>
-  `;
 
-  document.getElementById("voltar").onclick =
-    abrirTarefas;
+  </div>
+`;
 
-  const container =
-    document.getElementById("itensLista");
+  document.getElementById("voltar").onclick = abrirTarefas;
 
-  function criarItem(
-    texto = "",
-    concluido = false
-  ) {
+  const container = document.getElementById("itensLista");
+
+  function criarItem(texto = "", concluido = false) {
     const div = document.createElement("div");
 
     div.classList.add("item-tarefa");
@@ -1645,14 +2035,11 @@ function abrirEditorTarefa(
       </button>
     `;
 
-    const checkbox =
-      div.querySelector("input[type='checkbox']");
+    const checkbox = div.querySelector("input[type='checkbox']");
 
-    const input =
-      div.querySelector("input[type='text']");
+    const input = div.querySelector("input[type='text']");
 
-    const remover =
-      div.querySelector(".remover-item");
+    const remover = div.querySelector(".remover-item");
 
     function atualizarVisual() {
       if (checkbox.checked) {
@@ -1673,89 +2060,53 @@ function abrirEditorTarefa(
     container.appendChild(div);
   }
 
-  lista.forEach((item) =>
-    criarItem(item.texto, item.concluido)
-  );
+  lista.forEach((item) => criarItem(item.texto, item.concluido));
 
-  document.getElementById("addItem").onclick =
-    () => criarItem();
+  document.getElementById("addItem").onclick = () => criarItem();
 
-  document.getElementById("salvarLista").onclick =
-    async () => {
+  document.getElementById("salvarLista").onclick = async () => {
+    const titulo = document.getElementById("tituloLista").value.trim();
 
-      const titulo =
-        document
-          .getElementById("tituloLista")
-          .value
-          .trim();
+    const itens = [];
 
-      const itens = [];
+    document.querySelectorAll(".item-tarefa").forEach((div) => {
+      const checkbox = div.querySelector("input[type='checkbox']");
 
-      document
-        .querySelectorAll(".item-tarefa")
-        .forEach((div) => {
+      const input = div.querySelector("input[type='text']");
 
-          const checkbox =
-            div.querySelector(
-              "input[type='checkbox']"
-            );
-
-          const input =
-            div.querySelector(
-              "input[type='text']"
-            );
-
-          if (input.value.trim()) {
-            itens.push({
-              texto: input.value,
-              concluido: checkbox.checked,
-            });
-          }
+      if (input.value.trim()) {
+        itens.push({
+          texto: input.value,
+          concluido: checkbox.checked,
         });
-
-      if (!titulo) {
-        alert("Digite um título!");
-        return;
       }
+    });
 
-      if (itens.length === 0) {
-        alert(
-          "Adicione pelo menos uma tarefa!"
-        );
-        return;
-      }
+    if (!titulo) {
+      alert("Digite um título!");
+      return;
+    }
 
-      if (id) {
+    if (itens.length === 0) {
+      alert("Adicione pelo menos uma tarefa!");
+      return;
+    }
 
-        await update(
-          ref(
-            db,
-            `tarefas/${currentUser.uid}/${agendaId}/${id}`
-          ),
-          {
-            titulo,
-            itens,
-          }
-        );
+    if (id) {
+      await update(ref(db, `tarefas/${currentUser.uid}/${agendaId}/${id}`), {
+        titulo,
+        itens,
+      });
+    } else {
+      await push(ref(db, `tarefas/${currentUser.uid}/${agendaId}`), {
+        titulo,
+        itens,
+        data: Date.now(),
+      });
+    }
 
-      } else {
-
-        await push(
-          ref(
-            db,
-            `tarefas/${currentUser.uid}/${agendaId}`
-          ),
-          {
-            titulo,
-            itens,
-            data: Date.now(),
-          }
-        );
-
-      }
-
-      abrirTarefas();
-    };
+    abrirTarefas();
+  };
 }
 
 console.log("FUNÇÃO CARREGADA");
@@ -1765,10 +2116,7 @@ async function renderizarListasTarefas() {
 
   lista.innerHTML = "";
 
-  const tarefasRef = ref(
-    db,
-    `tarefas/${currentUser.uid}/${agendaId}`
-  );
+  const tarefasRef = ref(db, `tarefas/${currentUser.uid}/${agendaId}`);
 
   onValue(tarefasRef, (snapshot) => {
     lista.innerHTML = "";
@@ -1778,8 +2126,7 @@ async function renderizarListasTarefas() {
 
       const total = dados.itens?.length || 0;
 
-      const concluidas =
-        dados.itens?.filter((i) => i.concluido).length || 0;
+      const concluidas = dados.itens?.filter((i) => i.concluido).length || 0;
 
       const div = document.createElement("div");
 
@@ -1805,64 +2152,47 @@ async function renderizarListasTarefas() {
         </div>
 
         <div class="preview-tarefas">
-          ${
-            dados.itens
-              .slice(0, 3)
-              .map(
-                (item) => `
+          ${dados.itens
+            .slice(0, 3)
+            .map(
+              (item) => `
                 <div class="preview-item">
                   ${item.concluido ? "✅" : "⭕"}
                   <span>${item.texto}</span>
                 </div>
-              `
-              )
-              .join("")
-          }
+              `,
+            )
+            .join("")}
         </div>
       `;
 
       div.onclick = () => {
-        abrirEditorTarefa(
-          dados.itens,
-          child.key,
-          dados.titulo || ""
-        );
+        abrirEditorTarefa(dados.itens, child.key, dados.titulo || "");
       };
 
-      div
-  .querySelector(".btn-excluir-lista")
-  .onclick = async (e) => {
+      div.querySelector(".btn-excluir-lista").onclick = async (e) => {
+        e.stopPropagation();
 
-    e.stopPropagation();
+        const confirmado = confirm("Excluir esta lista?");
 
-    const confirmado = confirm(
-      "Excluir esta lista?"
-    );
+        if (!confirmado) return;
 
-    if (!confirmado) return;
+        await moverParaLixeira("tarefa", {
+          uid: currentUser.uid,
 
-    await moverParaLixeira(
-      "tarefa",
-      {
-        uid: currentUser.uid,
+          id: child.key,
 
-        id: child.key,
+          titulo: dados.titulo || "Lista",
 
-        titulo: dados.titulo || "Lista",
+          itens: dados.itens || [],
 
-        itens: dados.itens || [],
+          data: dados.data || Date.now(),
+        });
 
-        data: dados.data || Date.now()
-      }
-    );
-
-    await remove(
-      ref(
-        db,
-        `tarefas/${currentUser.uid}/${agendaId}/${child.key}`
-      )
-    );
-  };
+        await remove(
+          ref(db, `tarefas/${currentUser.uid}/${agendaId}/${child.key}`),
+        );
+      };
 
       lista.appendChild(div);
     });
@@ -1870,31 +2200,27 @@ async function renderizarListasTarefas() {
 }
 
 // ================== ATIVIDADE ==================
-
+//  const anoAtual = new Date().getFullYear();
 async function abrirAtividades() {
-  const anoAtual = new Date().getFullYear();
-
   conteudo.innerHTML = `
-    <header class="header">
-      <button id="voltar">⬅</button>
+    <div class="tela-atividades">
 
-      <div>
+      <header class="header">
+        <button id="voltar">⬅</button>
         <h2>Atividades</h2>
-        <small>${anoAtual}</small>
+      </header>
+
+      <div class="scroll-atividades">
+        <div id="listaAtividades"></div>
       </div>
-    </header>
-
-    <div class="area-atividades">
-
-      <div id="listaAtividades"></div>
 
       ${
         role === "admin"
           ? `
-        <div class="nova-anotacao" id="novaAtividade">
-          +
-        </div>
-      `
+            <div class="nova-anotacao" id="novaAtividade">
+              +
+            </div>
+          `
           : ""
       }
 
@@ -2048,7 +2374,7 @@ async function salvarNovaAtividade(modal) {
 
   if (recomendado) {
     const membroSnap = await get(
-      ref(db, `agendas/${agendaId}/membros/${recomendado}`)
+      ref(db, `agendas/${agendaId}/membros/${recomendado}`),
     );
 
     if (membroSnap.exists()) {
@@ -2121,7 +2447,7 @@ function abrirEditarAtividade(atv, id, mes, ano) {
   modal.classList.add("modal");
 
   modal.innerHTML = `
-    <div class="modal-conteudo">
+    <div class="modal-conteudo modal-editar-evento">
 
       <h2>Editar Atividade</h2>
 
@@ -2147,13 +2473,15 @@ function abrirEditarAtividade(atv, id, mes, ano) {
 
       <textarea id="editDescAtv">${atv.desc}</textarea>
 
-      <button id="salvarEdicaoAtv">
-        Salvar alterações
-      </button>
+     <div class="botoes-editar-evento">
+  <button id="salvarEdicao" class="btn-salvar-editar-evento">
+    Salvar
+  </button>
 
-      <button id="fecharEditAtv">
-        Cancelar
-      </button>
+  <button id="cancelarEdicao" class="btn-cancelar-editar-evento">
+    Cancelar
+  </button>
+</div>
 
     </div>
   `;
@@ -2224,18 +2552,15 @@ async function renderizarTodasAtividades() {
   let totalConcluido = 0;
 
   for (let id in dados) {
+    const atv = dados[id];
 
-  const atv = dados[id];
-
-  if (atv.status === "concluida") {
+    if (atv.status === "concluida") {
       totalConcluido++;
     } else if (atv.status === "em_andamento") {
       totalAndamento++;
     } else {
       totalAFazer++;
     }
-
-   
 
     const card = document.createElement("div");
     card.classList.add("card-atividade");
@@ -2257,8 +2582,8 @@ async function renderizarTodasAtividades() {
         atv.status === "concluida"
           ? "✅"
           : atv.status === "em_andamento"
-          ? "🟡"
-          : "⚪"
+            ? "🟡"
+            : "⚪"
       }
     </div>
 
@@ -2303,15 +2628,11 @@ async function renderizarTodasAtividades() {
 
     const botoes = card.querySelectorAll("button");
 
-botoes.forEach((btn) => {
-
-  btn.addEventListener("click", (ev) => {
-
-    ev.stopPropagation();
-
-  });
-
-});
+    botoes.forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+      });
+    });
 
     // =========================
     // COLOCAR NA COLUNA CERTA
@@ -2345,9 +2666,8 @@ function abrirModalDetalheAtividade(atv, id) {
 
   let botoesAdmin = "";
 
-if (role === "admin") {
-
-  botoesAdmin = `
+  if (role === "admin") {
+    botoesAdmin = `
 
     <div class="acoes-admin-atv">
 
@@ -2364,7 +2684,7 @@ if (role === "admin") {
     </div>
 
   `;
-}
+  }
 
   // A FAZER
   if (atv.status === "a-fazer" && atividadeLivre) {
@@ -2417,8 +2737,8 @@ if (role === "admin") {
           atv.status === "concluida"
             ? "✅ Concluída"
             : atv.status === "em_andamento"
-            ? "🟡 Em andamento"
-            : "⚪ A fazer"
+              ? "🟡 Em andamento"
+              : "⚪ A fazer"
         }
 
       </div>
@@ -2438,11 +2758,7 @@ if (role === "admin") {
         <span>👤 Responsável</span>
 
         <strong>
-          ${
-            atv.responsavelNome
-              ? atv.responsavelNome.split("@")[0]
-              : "Livre"
-          }
+          ${atv.responsavelNome ? atv.responsavelNome.split("@")[0] : "Livre"}
         </strong>
       </div>
 
@@ -2523,57 +2839,45 @@ if (role === "admin") {
   };
 
   // =========================
-// EDITAR
-// =========================
+  // EDITAR
+  // =========================
 
-const editarAtividadeBtn =
-  document.getElementById("editarAtividade");
+  const editarAtividadeBtn = document.getElementById("editarAtividade");
 
-if (editarAtividadeBtn) {
+  if (editarAtividadeBtn) {
+    editarAtividadeBtn.onclick = () => {
+      modal.remove();
 
-  editarAtividadeBtn.onclick = () => {
+      abrirEditarAtividade(atv, id);
+    };
+  }
 
-    modal.remove();
+  // =========================
+  // REMOVER
+  // =========================
 
-    abrirEditarAtividade(atv, id);
+  const removerAtividadeBtn = document.getElementById("removerAtividade");
 
-  };
-}
+  if (removerAtividadeBtn) {
+    removerAtividadeBtn.onclick = async () => {
+      const confirmar = confirm("Deseja remover esta atividade?");
 
-// =========================
-// REMOVER
-// =========================
+      if (!confirmar) return;
 
-const removerAtividadeBtn =
-  document.getElementById("removerAtividade");
+      // SALVA NA LIXEIRA
+      await moverParaLixeira("atividade", {
+        ...atv,
+        id,
+      });
 
-if (removerAtividadeBtn) {
+      // REMOVE
+      await remove(ref(db, `agendas/${agendaId}/atividades/${id}`));
 
-  removerAtividadeBtn.onclick = async () => {
+      modal.remove();
 
-    const confirmar = confirm(
-      "Deseja remover esta atividade?"
-    );
-
-    if (!confirmar) return;
-
-    // SALVA NA LIXEIRA
-    await moverParaLixeira("atividade", {
-      ...atv,
-      id,
-    });
-
-    // REMOVE
-    await remove(
-      ref(db, `agendas/${agendaId}/atividades/${id}`)
-    );
-
-    modal.remove();
-
-    renderizarTodasAtividades();
-
-  };
-}
+      renderizarTodasAtividades();
+    };
+  }
 
   // PEGAR ATIVIDADE
   const btnFazer = document.getElementById("btnFazerAtividade");
@@ -2608,54 +2912,48 @@ if (removerAtividadeBtn) {
   }
 
   // =========================
-// COMENTÁRIOS
-// =========================
+  // COMENTÁRIOS
+  // =========================
 
-// =========================
-// COMENTÁRIOS
-// =========================
+  // =========================
+  // COMENTÁRIOS
+  // =========================
 
-const comentariosRef = ref(
-  db,
-  `agendas/${agendaId}/atividades/${id}/comentarios`
-);
+  const comentariosRef = ref(
+    db,
+    `agendas/${agendaId}/atividades/${id}/comentarios`,
+  );
 
-const listaComentarios =
-  document.getElementById("listaComentarios");
+  const listaComentarios = document.getElementById("listaComentarios");
 
-// TEMPO REAL
-onValue(comentariosRef, (snapshot) => {
+  // TEMPO REAL
+  onValue(comentariosRef, (snapshot) => {
+    listaComentarios.innerHTML = "";
 
-  listaComentarios.innerHTML = "";
-
-  if (!snapshot.exists()) {
-
-    listaComentarios.innerHTML = `
+    if (!snapshot.exists()) {
+      listaComentarios.innerHTML = `
       <p class="sem-comentarios">
         Nenhum comentário ainda.
       </p>
     `;
 
-    return;
-  }
+      return;
+    }
 
-  const comentarios = snapshot.val();
+    const comentarios = snapshot.val();
 
-  Object.entries(comentarios)
-.sort((a, b) => a[1].data - b[1].data)
-.forEach(([comentarioId, comentario]) => {
+    Object.entries(comentarios)
+      .sort((a, b) => a[1].data - b[1].data)
+      .forEach(([comentarioId, comentario]) => {
+        const comentarioEhMeu = comentario.uid === currentUser.uid;
 
-  const comentarioEhMeu =
-  comentario.uid === currentUser.uid;
+        const podeExcluir = comentarioEhMeu || role === "admin";
 
-const podeExcluir =
-  comentarioEhMeu || role === "admin";
+        const div = document.createElement("div");
 
-    const div = document.createElement("div");
+        div.classList.add("card-comentario");
 
-    div.classList.add("card-comentario");
-
-   div.innerHTML = `
+        div.innerHTML = `
 
   <div class="topo-comentario">
 
@@ -2718,7 +3016,8 @@ const podeExcluir =
     ${
       comentario.respostas
         ? Object.values(comentario.respostas)
-            .map((r) => `
+            .map(
+              (r) => `
 
               <div class="card-resposta">
 
@@ -2736,7 +3035,8 @@ const podeExcluir =
 
               </div>
 
-            `)
+            `,
+            )
             .join("")
         : ""
     }
@@ -2745,223 +3045,155 @@ const podeExcluir =
 
 `;
 
-    const responderBtn =
-      div.querySelector(".responder-comentario");
+        const responderBtn = div.querySelector(".responder-comentario");
 
-    responderBtn.onclick = () => {
+        responderBtn.onclick = () => {
+          const input = document.getElementById("inputComentario");
 
-      const input =
-        document.getElementById("inputComentario");
+          input.value = `@${comentario.nome} `;
 
-      input.value =
-        `@${comentario.nome} `;
+          input.focus();
+        };
 
-      input.focus();
-    };
+        const menuBtn = div.querySelector(".btn-menu-comentario");
 
-    const menuBtn =
-  div.querySelector(".btn-menu-comentario");
+        const dropdown = div.querySelector(".dropdown-comentario");
 
-const dropdown =
-  div.querySelector(".dropdown-comentario");
+        menuBtn.onclick = (ev) => {
+          ev.stopPropagation();
 
-menuBtn.onclick = (ev) => {
+          dropdown.classList.toggle("ativo");
+        };
 
-  ev.stopPropagation();
+        document.addEventListener("click", () => {
+          dropdown.classList.remove("ativo");
+        });
 
-  dropdown.classList.toggle("ativo");
+        // EDITAR
+        const editarBtn = div.querySelector(".editar-comentario");
 
-};
+        editarBtn.onclick = async () => {
+          const novoTexto = prompt("Editar comentário:", comentario.texto);
 
-document.addEventListener("click", () => {
-  dropdown.classList.remove("ativo");
-});
+          if (!novoTexto) return;
 
-// EDITAR
-const editarBtn =
-  div.querySelector(".editar-comentario");
-
-editarBtn.onclick = async () => {
-
-  const novoTexto = prompt(
-    "Editar comentário:",
-    comentario.texto
-  );
-
-  if (!novoTexto) return;
-
-  await update(
-    ref(
-      db,
-      `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`
-    ),
-    {
-      texto: novoTexto,
-    }
-  );
-
-};
-
-// EXCLUIR
-const excluirBtn =
-  div.querySelector(".excluir-comentario");
-
-excluirBtn.onclick = async () => {
-
-  const confirmar = confirm(
-    "Excluir comentário?"
-  );
-
-  if (!confirmar) return;
-
-  await remove(
-    ref(
-      db,
-      `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`
-    )
-  );
-
-};
-
-    listaComentarios.appendChild(div);
-
-  });
-
-});
-
-// ENVIAR COMENTÁRIO
-document.getElementById(
-  "btnEnviarComentario"
-).onclick = async () => {
-
-  const input =
-    document.getElementById("inputComentario");
-
-  const texto = input.value.trim();
-
-  if (!texto) return;
-
-  const nome =
-    currentUser.email.split("@")[0];
-
-  // RESPOSTA
-  if (texto.startsWith("@")) {
-
-    const comentariosSnap =
-      await get(comentariosRef);
-
-    if (comentariosSnap.exists()) {
-
-      const comentarios =
-        comentariosSnap.val();
-
-      for (let comentarioId in comentarios) {
-
-        const comentario =
-          comentarios[comentarioId];
-
-        if (
-          texto.startsWith(
-            `@${comentario.nome}`
-          )
-        ) {
-
-          await push(
+          await update(
             ref(
               db,
-              `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}/respostas`
+              `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
             ),
             {
-              nome,
-              texto,
-              data: Date.now(),
-            }
+              texto: novoTexto,
+            },
           );
+        };
 
-          input.value = "";
+        // EXCLUIR
+        const excluirBtn = div.querySelector(".excluir-comentario");
 
-          return;
-        }
+        excluirBtn.onclick = async () => {
+          const confirmar = confirm("Excluir comentário?");
 
-      }
+          if (!confirmar) return;
 
-    }
+          await remove(
+            ref(
+              db,
+              `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
+            ),
+          );
+        };
 
-  }
+        listaComentarios.appendChild(div);
+      });
+  });
 
-  // COMENTÁRIO NORMAL
- // COMENTÁRIO NORMAL
-await push(comentariosRef, {
-  nome,
-  texto,
-  uid: currentUser.uid,
-  data: Date.now(),
-});
+  // ENVIAR COMENTÁRIO
+  document.getElementById("btnEnviarComentario").onclick = async () => {
+    const input = document.getElementById("inputComentario");
 
-  // MENÇÕES
-  const marcacoes =
-    texto.match(/@(\w+)/g);
+    const texto = input.value.trim();
 
-  if (marcacoes) {
+    if (!texto) return;
 
-    const membrosSnap = await get(
-      ref(db, `agendas/${agendaId}/membros`)
-    );
+    const nome = currentUser.email.split("@")[0];
 
-    if (membrosSnap.exists()) {
+    // RESPOSTA
+    if (texto.startsWith("@")) {
+      const comentariosSnap = await get(comentariosRef);
 
-      const membros = membrosSnap.val();
+      if (comentariosSnap.exists()) {
+        const comentarios = comentariosSnap.val();
 
-      for (let uid in membros) {
+        for (let comentarioId in comentarios) {
+          const comentario = comentarios[comentarioId];
 
-        const membro = membros[uid];
-
-        const nomeMembro =
-          (membro.email || "")
-            .split("@")[0]
-            .toLowerCase();
-
-        marcacoes.forEach(async (m) => {
-
-          const marcado =
-            m.replace("@", "")
-              .toLowerCase();
-
-          if (nomeMembro === marcado) {
-
+          if (texto.startsWith(`@${comentario.nome}`)) {
             await push(
               ref(
                 db,
-                `usuarios/${uid}/notificacoes`
+                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}/respostas`,
               ),
               {
-                texto:
-                  `💬 ${currentUser.email.split("@")[0]} mencionou você em uma atividade`,
+                nome,
+                texto,
+                data: Date.now(),
+              },
+            );
+
+            input.value = "";
+
+            return;
+          }
+        }
+      }
+    }
+
+    // COMENTÁRIO NORMAL
+    // COMENTÁRIO NORMAL
+    await push(comentariosRef, {
+      nome,
+      texto,
+      uid: currentUser.uid,
+      data: Date.now(),
+    });
+
+    // MENÇÕES
+    const marcacoes = texto.match(/@(\w+)/g);
+
+    if (marcacoes) {
+      const membrosSnap = await get(ref(db, `agendas/${agendaId}/membros`));
+
+      if (membrosSnap.exists()) {
+        const membros = membrosSnap.val();
+
+        for (let uid in membros) {
+          const membro = membros[uid];
+
+          const nomeMembro = (membro.email || "").split("@")[0].toLowerCase();
+
+          marcacoes.forEach(async (m) => {
+            const marcado = m.replace("@", "").toLowerCase();
+
+            if (nomeMembro === marcado) {
+              await push(ref(db, `usuarios/${uid}/notificacoes`), {
+                texto: `💬 ${currentUser.email.split("@")[0]} mencionou você em uma atividade`,
 
                 tipo: "comentario",
 
                 lida: false,
 
                 data: Date.now(),
-              }
-            );
-
-          }
-
-        });
-
+              });
+            }
+          });
+        }
       }
-
     }
 
-  }
-
-  input.value = "";
-
-};
-
+    input.value = "";
+  };
 }
-
 
 //===================Código DA AGENDA ================
 
@@ -3012,13 +3244,20 @@ async function abrirMembros() {
   const membrosSnap = await get(ref(db, `agendas/${agendaId}/membros`));
 
   conteudo.innerHTML = `
+  <div class="tela-membros">
+
     <header class="header">
       <button id="voltar">⬅</button>
-      <h2>Membros</h2>
+
+      <h2>Membros da Equipe</h2>
     </header>
 
-    <div id="listaMembros"></div>
-  `;
+    <div class="scroll-membros">
+      <div id="listaMembros"></div>
+    </div>
+
+  </div>
+`;
 
   document.getElementById("voltar").onclick = carregarCalendario;
 
@@ -3043,7 +3282,7 @@ async function abrirMembros() {
   // percorre membros
   for (let uid in membros) {
     if (uid === currentUser.uid && role === "admin") {
-      continue;
+      // mostra o próprio admin também
     }
 
     const membro = membros[uid];
@@ -3084,18 +3323,31 @@ async function abrirMembros() {
     <div class="member-info">
 
       <img
-        src="${membro.foto || "https://ui-avatars.com/api/?name=User"}"
-        class="avatar"
-      />
+  src="${
+    membro.foto ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      membro.nome || membro.email || "Usuário",
+    )}`
+  }"
+  class="avatar"
+/>
 
       <div class="dados-membro">
         <strong>
-          ${membro.email || "Sem email"}
+          ${membro.nome || membro.email || "Sem nome"}
         </strong>
 
         <small>
-          ${uid === currentUser.uid ? "Você" : "Membro"}
-        </small>
+  ${
+    uid === currentUser.uid
+      ? membro.role === "admin"
+        ? "Você • Administrador"
+        : "Você"
+      : membro.role === "admin"
+        ? "Administrador"
+        : "Membro"
+  }
+</small>
       </div>
 
     </div>
@@ -3156,13 +3408,51 @@ async function abrirMembros() {
 ${
   role === "admin" && uid !== currentUser.uid
     ? `
-      <button class="btn-remover remover-membro">
-        Remover membro
-      </button>
+      <div class="acoes-membro-admin">
+
+        <button class="btn-admin-membro">
+          ${membro.role === "admin" ? "Remover admin" : "Tornar admin"}
+        </button>
+
+        <button class="btn-remover remover-membro">
+          Remover membro
+        </button>
+
+      </div>
     `
     : ""
 }
 `;
+
+    if (role === "admin" && uid !== currentUser.uid) {
+      const btnAdmin = div.querySelector(".btn-admin-membro");
+
+      if (btnAdmin) {
+        btnAdmin.onclick = async (ev) => {
+          ev.stopPropagation();
+
+          const virarAdmin = membro.role !== "admin";
+
+          const confirmar = confirm(
+            virarAdmin
+              ? "Deseja tornar este membro administrador?"
+              : "Deseja remover o cargo de administrador deste membro?",
+          );
+
+          if (!confirmar) return;
+
+          await update(ref(db, `agendas/${agendaId}/membros/${uid}`), {
+            role: virarAdmin ? "admin" : "membro",
+          });
+
+          await update(ref(db, `usuarios/${uid}`), {
+            role: virarAdmin ? "admin" : "viewer",
+          });
+
+          abrirMembros();
+        };
+      }
+    }
 
     // remover
     if (role === "admin" && uid !== currentUser.uid) {
@@ -3171,6 +3461,7 @@ ${
 
         await update(ref(db, `usuarios/${uid}`), {
           agendaId: null,
+          role: "viewer",
         });
 
         abrirMembros();
@@ -3208,18 +3499,15 @@ function criarBotaoTema() {
 }
 
 function destacarMencoes(texto) {
-
   return texto.replace(
-
     /@(\w+)/g,
 
     `
       <span class="mencao-comentario">
         @$1
       </span>
-    `
+    `,
   );
-
 }
 
 function atualizarIconeTema(botao) {
@@ -3319,7 +3607,7 @@ async function abrirLixeira() {
     }
 
     const diasRestantes = Math.ceil(
-      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24)
+      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24),
     );
 
     const div = document.createElement("div");
@@ -3359,23 +3647,23 @@ async function abrirLixeira() {
         await set(
           ref(
             db,
-            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`
+            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`,
           ),
-          item.dados
+          item.dados,
         );
       }
 
       if (item.tipo === "anotacao") {
         await set(
           ref(db, `anotacoes/${item.dados.uid}/${agendaId}/${item.dados.id}`),
-          item.dados
+          item.dados,
         );
       }
 
       if (item.tipo === "tarefa") {
         await set(
           ref(db, `tarefas/${item.dados.uid}/${agendaId}/${item.dados.id}`),
-          item.dados
+          item.dados,
         );
       }
 

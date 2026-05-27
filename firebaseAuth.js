@@ -38,7 +38,11 @@ export const db = getDatabase(app);
 // CADASTRO
 // ========================
 export async function cadastrar(email, senha) {
-  const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
+  const userCredential = await createUserWithEmailAndPassword(
+    auth,
+    email,
+    senha,
+  );
   const user = userCredential.user;
 
   await set(ref(db, "usuarios/" + user.uid), {
@@ -111,15 +115,19 @@ export async function criarAgenda(uid) {
     membros: {
       [uid]: {
         email: user.email || "Sem email",
+        nome: user.displayName || user.email?.split("@")[0] || "Usuário",
+        foto: user.photoURL || null,
         role: "admin",
       },
     },
   });
 
   await update(ref(db, `usuarios/${uid}`), {
-    agendaId: codigo,
-    role: "admin",
-  });
+  agendaId: codigo,
+  role: "admin",
+  foto: user.photoURL || null,
+  nome: user.displayName || user.email?.split("@")[0] || "Usuário",
+});
 
   return codigo;
 }
@@ -143,9 +151,11 @@ export async function entrarNaAgenda(uid, codigo) {
 
   // adiciona como membro
   await set(ref(db, `agendas/${codigo}/membros/${uid}`), {
-    email: user.email || "Sem email",
-    role: "membro",
-  });
+  email: user.email || "Sem email",
+  nome: user.displayName || userData?.nome || user.email?.split("@")[0] || "Usuário",
+  foto: userData?.foto || user.photoURL || null,
+  role: "membro",
+});
 
   // ATUALIZA USUÁRIO (IMPORTANTE: set evita dados parciais quebrados)
   await set(ref(db, `usuarios/${uid}`), {
@@ -161,8 +171,7 @@ export async function entrarNaAgenda(uid, codigo) {
 export async function salvarUsuarioGoogle(user) {
   const snapshot = await get(ref(db, "usuarios/" + user.uid));
 
-  const email =
-    user.email || user.providerData?.[0]?.email || "sem-email";
+  const email = user.email || user.providerData?.[0]?.email || "sem-email";
 
   if (!snapshot.exists()) {
     await set(ref(db, "usuarios/" + user.uid), {

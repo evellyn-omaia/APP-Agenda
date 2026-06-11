@@ -120,6 +120,7 @@ body {
   padding-bottom: 20px;
 }
 
+
 /* COLUNAS */
 .coluna {
   flex: 0 0 320px;
@@ -131,6 +132,35 @@ body {
   flex-direction: column;
 
   gap: 12px;
+
+  padding-right: 18px;
+  border-right: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+body.dark .coluna {
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+body.dark .coluna:last-child {
+  border-right: none;
+}
+
+/* Remove a linha da última coluna */
+.coluna:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.datas-atividade {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.datas-atividade small {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* MENU */

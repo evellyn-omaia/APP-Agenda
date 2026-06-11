@@ -2441,7 +2441,7 @@ async function salvarNovaAtividade(modal) {
   renderizarTodasAtividades();
 }
 
-function abrirEditarAtividade(atv, id, mes, ano) {
+function abrirEditarAtividade(atv, id) {
   const modal = document.createElement("div");
 
   modal.classList.add("modal");
@@ -2451,59 +2451,137 @@ function abrirEditarAtividade(atv, id, mes, ano) {
 
       <h2>Editar Atividade</h2>
 
-      <input id="editNomeAtv" value="${atv.nome}">
+      <div class="grupo-input">
+        <label>Nome da atividade</label>
+        <input id="editNomeAtv" value="${atv.nome || ""}">
+      </div>
 
-      <input
-        type="date"
-        id="editInicioAtv"
-        value="${atv.inicio}"
-      >
+      <div class="grupo-input">
+        <label>Data de início</label>
+        <input
+          type="date"
+          id="editInicioAtv"
+          value="${atv.inicio || ""}"
+        >
+      </div>
 
-      <input
-        type="date"
-        id="editPrazoAtv"
-        value="${atv.prazo}"
-      >
+      <div class="grupo-input">
+        <label>Prazo final</label>
+        <input
+          type="date"
+          id="editPrazoAtv"
+          value="${atv.prazo || ""}"
+        >
+      </div>
 
-      <select id="editUrgenciaAtv">
-        <option value="baixa">Baixa</option>
-        <option value="media">Média</option>
-        <option value="alta">Alta</option>
-      </select>
+      <div class="grupo-input">
+        <label>Nível de urgência</label>
+        <select id="editUrgenciaAtv">
+          <option value="baixa">🟢 Baixa</option>
+          <option value="media">🟡 Média</option>
+          <option value="alta">🔴 Alta</option>
+        </select>
+      </div>
 
-      <textarea id="editDescAtv">${atv.desc}</textarea>
+      <div class="grupo-input">
+        <label>Recomendar para um membro</label>
+        <select id="editMembroRecomendado">
+          <option value="">Ninguém</option>
+        </select>
+      </div>
 
-     <div class="botoes-editar-evento">
-  <button id="salvarEdicao" class="btn-salvar-editar-evento">
-    Salvar
-  </button>
+      <div class="grupo-input">
+        <label>Descrição</label>
+        <textarea id="editDescAtv">${atv.desc || ""}</textarea>
+      </div>
 
-  <button id="cancelarEdicao" class="btn-cancelar-editar-evento">
-    Cancelar
-  </button>
-</div>
+      <div class="botoes-editar-evento">
+        <button id="salvarEdicaoAtv" class="btn-salvar-editar-evento">
+          Salvar
+        </button>
+
+        <button id="cancelarEdicaoAtv" class="btn-cancelar-editar-evento">
+          Cancelar
+        </button>
+      </div>
 
     </div>
   `;
 
   document.body.appendChild(modal);
 
-  document.getElementById("editUrgenciaAtv").value = atv.urgencia;
+  document.getElementById("editUrgenciaAtv").value = atv.urgencia || "baixa";
 
-  document.getElementById("fecharEditAtv").onclick = () => modal.remove();
+  const selectMembro = document.getElementById("editMembroRecomendado");
+
+  get(ref(db, `agendas/${agendaId}/membros`)).then((snap) => {
+    if (!snap.exists()) return;
+
+    const membros = snap.val();
+
+    for (let uid in membros) {
+      if (uid === currentUser.uid) continue;
+
+      const membro = membros[uid];
+
+      const option = document.createElement("option");
+      option.value = uid;
+      option.textContent = (membro.email || "Membro").split("@")[0];
+
+      selectMembro.appendChild(option);
+    }
+
+    selectMembro.value = atv.recomendadoPara || "";
+  });
+
+  document.getElementById("cancelarEdicaoAtv").onclick = () => {
+    modal.remove();
+  };
 
   document.getElementById("salvarEdicaoAtv").onclick = async () => {
+    const nome = document.getElementById("editNomeAtv").value;
+    const inicio = document.getElementById("editInicioAtv").value;
+    const prazo = document.getElementById("editPrazoAtv").value;
+    const urgencia = document.getElementById("editUrgenciaAtv").value;
+    const desc = document.getElementById("editDescAtv").value;
+    const recomendado = document.getElementById("editMembroRecomendado").value;
+
+    if (!nome.trim()) {
+      alert("Digite o nome da atividade");
+      return;
+    }
+
+    let recomendadoNome = null;
+
+    if (recomendado) {
+      const membroSnap = await get(
+        ref(db, `agendas/${agendaId}/membros/${recomendado}`),
+      );
+
+      if (membroSnap.exists()) {
+        const membro = membroSnap.val();
+        recomendadoNome = (membro.email || "Membro").split("@")[0];
+      }
+    }
+
     await update(ref(db, `agendas/${agendaId}/atividades/${id}`), {
-      nome: document.getElementById("editNomeAtv").value,
-
-      inicio: document.getElementById("editInicioAtv").value,
-
-      prazo: document.getElementById("editPrazoAtv").value,
-
-      urgencia: document.getElementById("editUrgenciaAtv").value,
-
-      desc: document.getElementById("editDescAtv").value,
+      nome,
+      inicio,
+      prazo,
+      urgencia,
+      desc,
+      recomendadoPara: recomendado || null,
+      recomendadoParaNome: recomendadoNome || null,
     });
+
+    if (recomendado && recomendado !== atv.recomendadoPara) {
+      await push(ref(db, `usuarios/${recomendado}/notificacoes`), {
+        texto: `⭐ Uma atividade foi recomendada para você: ${nome}`,
+        tipo: "recomendacao",
+        lida: false,
+        data: Date.now(),
+      });
+    }
 
     modal.remove();
 
@@ -2593,17 +2671,21 @@ async function renderizarTodasAtividades() {
     ${atv.desc || "Sem descrição"}
   </p>
 
-  <div class="infos-atv">
+<div class="infos-atv datas-atividade">
 
-    <small>
-      📅 ${atv.prazo || "Sem prazo"}
-    </small>
+  <small>
+    🟢 Início: ${atv.inicio || "Sem data"}
+  </small>
 
-    <small>
-      👤 ${atv.responsavelNome ? atv.responsavelNome.split("@")[0] : "Livre"}
-    </small>
+  <small>
+    🔴 Prazo: ${atv.prazo || "Sem prazo"}
+  </small>
 
-  </div>
+  <small>
+    👤 ${atv.responsavelNome ? atv.responsavelNome.split("@")[0] : "Livre"}
+  </small>
+
+</div>
 
   ${
     atv.recomendadoPara
@@ -2946,8 +3028,11 @@ function abrirModalDetalheAtividade(atv, id) {
       .sort((a, b) => a[1].data - b[1].data)
       .forEach(([comentarioId, comentario]) => {
         const comentarioEhMeu = comentario.uid === currentUser.uid;
+        const usuarioEhAdmin = role === "admin";
 
-        const podeExcluir = comentarioEhMeu || role === "admin";
+        const podeEditar = comentarioEhMeu;
+        const podeExcluir = comentarioEhMeu || usuarioEhAdmin;
+        const podeMostrarMenu = podeEditar || podeExcluir;
 
         const div = document.createElement("div");
 
@@ -2969,6 +3054,9 @@ function abrirModalDetalheAtividade(atv, id) {
 
     </div>
 
+   ${
+     podeMostrarMenu
+       ? `
     <div class="menu-comentario">
 
       <button class="btn-menu-comentario">
@@ -2976,6 +3064,9 @@ function abrirModalDetalheAtividade(atv, id) {
       </button>
 
       <div class="dropdown-comentario">
+    `
+       : ""
+   }
 
   ${
     comentarioEhMeu
@@ -2997,9 +3088,14 @@ function abrirModalDetalheAtividade(atv, id) {
       : ""
   }
 
-</div>
-
+${
+  podeMostrarMenu
+    ? `
+      </div>
     </div>
+    `
+    : ""
+}
 
   </div>
 
@@ -3056,53 +3152,57 @@ function abrirModalDetalheAtividade(atv, id) {
         };
 
         const menuBtn = div.querySelector(".btn-menu-comentario");
-
         const dropdown = div.querySelector(".dropdown-comentario");
 
-        menuBtn.onclick = (ev) => {
-          ev.stopPropagation();
+        if (menuBtn && dropdown) {
+          menuBtn.onclick = (ev) => {
+            ev.stopPropagation();
+            dropdown.classList.toggle("ativo");
+          };
 
-          dropdown.classList.toggle("ativo");
-        };
-
-        document.addEventListener("click", () => {
-          dropdown.classList.remove("ativo");
-        });
+          document.addEventListener("click", () => {
+            dropdown.classList.remove("ativo");
+          });
+        }
 
         // EDITAR
         const editarBtn = div.querySelector(".editar-comentario");
 
-        editarBtn.onclick = async () => {
-          const novoTexto = prompt("Editar comentário:", comentario.texto);
+        if (editarBtn) {
+          editarBtn.onclick = async () => {
+            const novoTexto = prompt("Editar comentário:", comentario.texto);
 
-          if (!novoTexto) return;
+            if (!novoTexto) return;
 
-          await update(
-            ref(
-              db,
-              `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
-            ),
-            {
-              texto: novoTexto,
-            },
-          );
-        };
+            await update(
+              ref(
+                db,
+                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
+              ),
+              {
+                texto: novoTexto,
+              },
+            );
+          };
+        }
 
         // EXCLUIR
         const excluirBtn = div.querySelector(".excluir-comentario");
 
-        excluirBtn.onclick = async () => {
-          const confirmar = confirm("Excluir comentário?");
+        if (excluirBtn) {
+          excluirBtn.onclick = async () => {
+            const confirmar = confirm("Excluir comentário?");
 
-          if (!confirmar) return;
+            if (!confirmar) return;
 
-          await remove(
-            ref(
-              db,
-              `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
-            ),
-          );
-        };
+            await remove(
+              ref(
+                db,
+                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
+              ),
+            );
+          };
+        }
 
         listaComentarios.appendChild(div);
       });

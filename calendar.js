@@ -62,6 +62,39 @@ onAuthStateChanged(auth, async (user) => {
 
 const conteudo = document.getElementById("conteudo");
 
+// ================== MENU RESPONSIVO ==================
+
+function abrirMenuResponsivo() {
+  document.body.classList.add("menu-aberto");
+}
+
+function fecharMenuResponsivo() {
+  document.body.classList.remove("menu-aberto");
+}
+
+const btnAbrirMenu = document.getElementById("btnAbrirMenu");
+const overlayMenu = document.getElementById("overlayMenu");
+const menuLateral = document.querySelector(".menu");
+
+if (btnAbrirMenu) {
+  btnAbrirMenu.onclick = abrirMenuResponsivo;
+}
+
+if (overlayMenu) {
+  overlayMenu.onclick = fecharMenuResponsivo;
+}
+
+if (menuLateral) {
+  menuLateral.addEventListener("click", (event) => {
+    const clicouOpcaoMenu = event.target.closest("li, button");
+    const clicouInputBusca = event.target.closest("#inputBusca");
+
+    if (clicouOpcaoMenu && !clicouInputBusca && window.innerWidth <= 700) {
+      fecharMenuResponsivo();
+    }
+  });
+}
+
 let dataAtual = new Date();
 let filtroBusca = "";
 

@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Agenda</title>
   <link rel="stylesheet" href="styleAgenda.css" />
+  <link rel="shortcut icon" href="./icons/icon-web.png" type="image/x-icon">
 
 <link rel="manifest" href="./manifest.webmanifest" />
 <meta name="theme-color" content="#6c63ff" />
@@ -20,11 +21,18 @@
 </head>
 
 <body>
+  <button id="btnAbrirMenu" class="btn-abrir-menu" aria-label="Abrir menu">
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
+
+<div id="overlayMenu" class="overlay-menu"></div>
 
   <div class="container">
     <!-- MENU -->
     <aside class="menu">
-      <h2>Agenda</h2>
+      <h2>Agenda Maia</h2>
       <ul>
         <li id="buscar">
           Pesquisar

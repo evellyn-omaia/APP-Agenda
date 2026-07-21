@@ -44,16 +44,59 @@ onAuthStateChanged(auth, async (user) => {
 
   const data = await getUserData(user.uid);
 
-  if (!data?.agendaId) {
+  /*
+    Agora não usamos mais agendaId diretamente
+    dentro do usuário.
+
+    Usamos agendaAtual.
+  */
+  if (!data?.agendaAtual) {
     window.location.href = "selecionarAgenda.html";
+
+    return;
+  }
+
+  /*
+    Busca o cadastro do usuário dentro
+    da agenda que ele escolheu.
+  */
+  const membroSnapshot = await get(
+    ref(db, `agendas/${data.agendaAtual}/membros/${user.uid}`)
+  );
+
+  /*
+    Segurança:
+
+    Caso agendaAtual esteja preenchida,
+    mas o usuário não faça mais parte da agenda,
+    limpamos agendaAtual e voltamos para a seleção.
+  */
+  if (!membroSnapshot.exists()) {
+    await update(ref(db, `usuarios/${user.uid}`), {
+      agendaAtual: null,
+    });
+
+    window.location.href = "selecionarAgenda.html";
+
     return;
   }
 
   currentUser = user;
 
-  role = data.role;
+  /*
+    A agenda usada pelo calendário será
+    a agenda escolhida na tela anterior.
+  */
+  agendaId = data.agendaAtual;
 
-  agendaId = data.agendaId;
+  /*
+    O cargo agora vem de dentro da agenda.
+
+    Exemplo:
+
+    agendas/ABC123/membros/UID/role
+  */
+  role = membroSnapshot.val().role || "membro";
 
   carregarCalendario();
   ouvirNotificacoes();
@@ -186,7 +229,9 @@ function abrirNotificacoes() {
       const recomendada = n.tipo === "recomendacao";
 
       return `
-        <div class="card-notificacao ${recomendada ? "notif-destaque" : ""}" data-id="${n.id}">
+        <div class="card-notificacao ${
+          recomendada ? "notif-destaque" : ""
+        }" data-id="${n.id}">
           <div class="notif-icon">${recomendada ? "⭐" : "🔔"}</div>
 
           <div class="notif-info">
@@ -287,7 +332,7 @@ function carregarCalendario() {
     mostrarPreviewDia(
       dataAtual.getDate(),
       dataAtual.getMonth(),
-      dataAtual.getFullYear(),
+      dataAtual.getFullYear()
     );
   };
 }
@@ -455,7 +500,7 @@ function abrirSeletorData() {
           >
             ${m}
           </option>
-        `,
+        `
           )
           .join("")}
 
@@ -651,7 +696,7 @@ async function abrirDia(dia, mes, ano) {
           });
 
           await remove(
-            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`),
+            ref(db, `agendas/${agendaId}/eventos/${dataKey}/${e.id}`)
           );
 
           abrirDia(dia, mes, ano);
@@ -676,7 +721,7 @@ async function toggleFavorito(evento, ano, mes, dia) {
       ref(db, `agendas/${agendaId}/eventos/${dataKey}/${evento.id}`),
       {
         favorito: novoValor,
-      },
+      }
     );
 
     evento.favorito = novoValor;
@@ -722,7 +767,7 @@ async function converterArquivosParaBase64(files) {
 
         reader.readAsDataURL(file);
       });
-    }),
+    })
   );
 }
 
@@ -921,7 +966,7 @@ function editarEvento(evento, dia, mes, ano) {
         favorito: document.getElementById("editFavorito").checked,
         anexos: anexosFinais,
         anexo: null,
-      },
+      }
     );
 
     modal.remove();
@@ -1193,7 +1238,11 @@ function abrirDetalhesEvento(evento, dia, mes, ano) {
 
       <div>
         <strong>Anexos:</strong>
-        ${anexos.length > 0 ? renderizarAnexos(anexos, "grande") : "<p>Nenhum anexo</p>"}
+        ${
+          anexos.length > 0
+            ? renderizarAnexos(anexos, "grande")
+            : "<p>Nenhum anexo</p>"
+        }
       </div>
 
       <button id="fecharDetalhesEvento">
@@ -1252,7 +1301,7 @@ async function buscarEventosFiltrados(ano, mes, termo) {
       let filtrados = eventos.filter(
         (e) =>
           e.nome.toLowerCase().includes(termo.toLowerCase()) ||
-          String(diaDB).includes(termo),
+          String(diaDB).includes(termo)
       );
 
       if (filtrados.length > 0) {
@@ -1381,39 +1430,97 @@ function abrirPerfil() {
 ${
   role === "admin"
     ? `
-      <div class="codigo-admin">
+      <div class="secao-perigo-perfil">
 
-  <div class="codigo-topo">
-    <div>
-      <span class="codigo-label">
-        Código da agenda
+        <h3 class="titulo-perigo-perfil">
+          Administração da agenda
+        </h3>
+
+        <p class="descricao-perigo-perfil">
+          A exclusão remove esta agenda para todos os membros.
+          Essa ação não poderá ser desfeita.
+        </p>
+
+        <button
+          type="button"
+          id="excluirAgenda"
+          class="btn-perigo-perfil"
+        >
+          Excluir esta agenda
+        </button>
+
+      </div>
+    `
+    : `
+      <div class="secao-perigo-perfil">
+
+        <h3 class="titulo-perigo-perfil">
+          Participação na agenda
+        </h3>
+
+        <p class="descricao-perigo-perfil">
+          Você deixará de participar desta agenda,
+          mas continuará conectado à sua conta.
+        </p>
+
+        <button
+          type="button"
+          id="sairAgenda"
+          class="btn-perigo-perfil"
+        >
+          Sair desta agenda
+        </button>
+
+      </div>
+    `
+}
+<div class="secao-acoes-perfil">
+
+  <h3 class="titulo-acoes-perfil">
+    Conta e agenda
+  </h3>
+
+  <div class="lista-acoes-perfil">
+
+    <button
+      type="button"
+      id="trocarAgenda"
+      class="btn-acao-perfil"
+    >
+      <span class="icone-acao-perfil">
+        📅
       </span>
 
-      <h3 class="codigo-texto">
-        ${agendaId}
-      </h3>
-    </div>
+      <span class="texto-acao-perfil">
+        <strong>Trocar de agenda</strong>
 
-    <button id="copiarCodigoAgenda" class="btn-copiar-codigo">
-      Copiar
+        <small>
+          Escolher outra agenda desta conta
+        </small>
+      </span>
     </button>
+
+    <button
+      type="button"
+      id="logout"
+      class="btn-acao-perfil btn-deslogar-perfil"
+    >
+      <span class="icone-acao-perfil">
+        ↪
+      </span>
+
+      <span class="texto-acao-perfil">
+        <strong>Deslogar</strong>
+
+        <small>
+          Encerrar a sessão desta conta
+        </small>
+      </span>
+    </button>
+
   </div>
 
 </div>
-
-      <button id="excluirAgenda" class="btn-danger">
-        Excluir Agenda
-      </button>
-    `
-    : `
-      <button id="sairAgenda" class="btn-danger">
-        Sair da Agenda
-      </button>
-    `
-}
-
-<button id="mudarConta">Mudar de conta</button>
-<button id="logout">Deslogar</button>
 
     </div>
   `;
@@ -1506,52 +1613,103 @@ ${
   };
 
   // =========================
-  // TROCAR CONTA
+  // TROCAR DE AGENDA
   // =========================
-  document.getElementById("mudarConta").onclick = () => {
-    window.location.href = "index.html";
-  };
+
+  const trocarAgendaBtn = document.getElementById("trocarAgenda");
+
+  if (trocarAgendaBtn) {
+    trocarAgendaBtn.onclick = () => {
+      /*
+      O usuário continua logado.
+
+      Ele não é removido da agenda atual.
+      Apenas volta para a tela onde pode escolher
+      outra agenda.
+    */
+      window.location.href = "selecionarAgenda.html";
+    };
+  }
 
   // =========================
   // SAIR DA AGENDA (MEMBRO)
   // =========================
 
-  const sairAgendaBtn = document.getElementById("sairAgenda");
+  // =========================
+// SAIR DA AGENDA (MEMBRO)
+// =========================
 
-  if (sairAgendaBtn) {
-    sairAgendaBtn.onclick = async () => {
-      const confirmar = confirm(
-        "Deseja realmente sair da agenda?\n\nVocê perderá suas informações da agenda.",
+const sairAgendaBtn =
+  document.getElementById("sairAgenda");
+
+if (sairAgendaBtn) {
+  sairAgendaBtn.onclick = async () => {
+    const confirmar = confirm(
+      "Deseja realmente sair desta agenda?\n\nVocê perderá suas informações desta agenda.",
+    );
+
+    if (!confirmar) return;
+
+    try {
+      // remove o usuário dos membros da agenda
+      await remove(
+        ref(
+          db,
+          `agendas/${agendaId}/membros/${currentUser.uid}`,
+        ),
       );
 
-      if (!confirmar) return;
+      // remove as tarefas deste usuário nesta agenda
+      await remove(
+        ref(
+          db,
+          `tarefas/${currentUser.uid}/${agendaId}`,
+        ),
+      );
 
-      try {
-        // remove membro da agenda
-        await remove(ref(db, `agendas/${agendaId}/membros/${currentUser.uid}`));
+      // remove as anotações deste usuário nesta agenda
+      await remove(
+        ref(
+          db,
+          `anotacoes/${currentUser.uid}/${agendaId}`,
+        ),
+      );
 
-        // remove tarefas
-        await remove(ref(db, `tarefas/${currentUser.uid}/${agendaId}`));
+      // remove apenas esta agenda da lista do usuário
+      await remove(
+        ref(
+          db,
+          `usuarios/${currentUser.uid}/agendas/${agendaId}`,
+        ),
+      );
 
-        // remove anotações
-        await remove(ref(db, `anotacoes/${currentUser.uid}/${agendaId}`));
+      // limpa a agenda atualmente selecionada
+      await update(
+        ref(
+          db,
+          `usuarios/${currentUser.uid}`,
+        ),
+        {
+          agendaAtual: null,
+        },
+      );
 
-        // remove agenda do usuário
-        await update(ref(db, `usuarios/${currentUser.uid}`), {
-          agendaId: null,
-          role: null,
-        });
+      alert("Você saiu da agenda!");
 
-        alert("Você saiu da agenda!");
+      window.location.href =
+        "selecionarAgenda.html";
+    } catch (erro) {
+      console.error(
+        "Erro ao sair da agenda:",
+        erro,
+      );
 
-        window.location.href = "selecionarAgenda.html";
-      } catch (erro) {
-        console.error(erro);
-
-        alert("Erro ao sair da agenda");
-      }
-    };
-  }
+      alert(
+        "Erro ao sair da agenda.",
+      );
+    }
+  };
+}
 
   // =========================
   // EXCLUIR AGENDA (ADMIN)
@@ -1562,7 +1720,7 @@ ${
   if (excluirAgendaBtn) {
     excluirAgendaBtn.onclick = async () => {
       const confirmar = confirm(
-        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados.",
+        "Deseja realmente excluir esta agenda?\n\nTODOS os dados serão apagados."
       );
 
       if (!confirmar) return;
@@ -1575,18 +1733,29 @@ ${
           const membros = membrosSnap.val();
 
           // limpa usuários
-          for (let uid in membros) {
-            await update(ref(db, `usuarios/${uid}`), {
-              agendaId: null,
-              role: null,
-            });
+          // remove esta agenda da lista do usuário
+await remove(
+  ref(
+    db,
+    `usuarios/${uid}/agendas/${agendaId}`,
+  ),
+);
 
-            // remove tarefas
-            await remove(ref(db, `tarefas/${uid}/${agendaId}`));
+const usuarioSnapshot = await get(
+  ref(db, `usuarios/${uid}`),
+);
 
-            // remove anotações
-            await remove(ref(db, `anotacoes/${uid}/${agendaId}`));
-          }
+if (
+  usuarioSnapshot.exists() &&
+  usuarioSnapshot.val().agendaAtual === agendaId
+) {
+  await update(
+    ref(db, `usuarios/${uid}`),
+    {
+      agendaAtual: null,
+    },
+  );
+}
         }
 
         // remove agenda inteira
@@ -1747,7 +1916,7 @@ async function renderizarAnotacoes() {
   lista.innerHTML = "";
 
   const snapshot = await get(
-    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`),
+    ref(db, `anotacoes/${currentUser.uid}/${agendaId}`)
   );
 
   if (!snapshot.exists()) return;
@@ -2193,7 +2362,7 @@ async function renderizarListasTarefas() {
                   ${item.concluido ? "✅" : "⭕"}
                   <span>${item.texto}</span>
                 </div>
-              `,
+              `
             )
             .join("")}
         </div>
@@ -2223,7 +2392,7 @@ async function renderizarListasTarefas() {
         });
 
         await remove(
-          ref(db, `tarefas/${currentUser.uid}/${agendaId}/${child.key}`),
+          ref(db, `tarefas/${currentUser.uid}/${agendaId}/${child.key}`)
         );
       };
 
@@ -2407,7 +2576,7 @@ async function salvarNovaAtividade(modal) {
 
   if (recomendado) {
     const membroSnap = await get(
-      ref(db, `agendas/${agendaId}/membros/${recomendado}`),
+      ref(db, `agendas/${agendaId}/membros/${recomendado}`)
     );
 
     if (membroSnap.exists()) {
@@ -2588,7 +2757,7 @@ function abrirEditarAtividade(atv, id) {
 
     if (recomendado) {
       const membroSnap = await get(
-        ref(db, `agendas/${agendaId}/membros/${recomendado}`),
+        ref(db, `agendas/${agendaId}/membros/${recomendado}`)
       );
 
       if (membroSnap.exists()) {
@@ -2693,8 +2862,8 @@ async function renderizarTodasAtividades() {
         atv.status === "concluida"
           ? "✅"
           : atv.status === "em_andamento"
-            ? "🟡"
-            : "⚪"
+          ? "🟡"
+          : "⚪"
       }
     </div>
 
@@ -2852,8 +3021,8 @@ function abrirModalDetalheAtividade(atv, id) {
           atv.status === "concluida"
             ? "✅ Concluída"
             : atv.status === "em_andamento"
-              ? "🟡 Em andamento"
-              : "⚪ A fazer"
+            ? "🟡 Em andamento"
+            : "⚪ A fazer"
         }
 
       </div>
@@ -3036,7 +3205,7 @@ function abrirModalDetalheAtividade(atv, id) {
 
   const comentariosRef = ref(
     db,
-    `agendas/${agendaId}/atividades/${id}/comentarios`,
+    `agendas/${agendaId}/atividades/${id}/comentarios`
   );
 
   const listaComentarios = document.getElementById("listaComentarios");
@@ -3164,7 +3333,7 @@ ${
 
               </div>
 
-            `,
+            `
             )
             .join("")
         : ""
@@ -3210,11 +3379,11 @@ ${
             await update(
               ref(
                 db,
-                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
+                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`
               ),
               {
                 texto: novoTexto,
-              },
+              }
             );
           };
         }
@@ -3231,8 +3400,8 @@ ${
             await remove(
               ref(
                 db,
-                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`,
-              ),
+                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}`
+              )
             );
           };
         }
@@ -3265,13 +3434,13 @@ ${
             await push(
               ref(
                 db,
-                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}/respostas`,
+                `agendas/${agendaId}/atividades/${id}/comentarios/${comentarioId}/respostas`
               ),
               {
                 nome,
                 texto,
                 data: Date.now(),
-              },
+              }
             );
 
             input.value = "";
@@ -3310,7 +3479,9 @@ ${
 
             if (nomeMembro === marcado) {
               await push(ref(db, `usuarios/${uid}/notificacoes`), {
-                texto: `💬 ${currentUser.email.split("@")[0]} mencionou você em uma atividade`,
+                texto: `💬 ${
+                  currentUser.email.split("@")[0]
+                } mencionou você em uma atividade`,
 
                 tipo: "comentario",
 
@@ -3459,7 +3630,7 @@ async function abrirMembros() {
   src="${
     membro.foto ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      membro.nome || membro.email || "Usuário",
+      membro.nome || membro.email || "Usuário"
     )}`
   }"
   class="avatar"
@@ -3477,8 +3648,8 @@ async function abrirMembros() {
         ? "Você • Administrador"
         : "Você"
       : membro.role === "admin"
-        ? "Administrador"
-        : "Membro"
+      ? "Administrador"
+      : "Membro"
   }
 </small>
       </div>
@@ -3569,7 +3740,7 @@ ${
           const confirmar = confirm(
             virarAdmin
               ? "Deseja tornar este membro administrador?"
-              : "Deseja remover o cargo de administrador deste membro?",
+              : "Deseja remover o cargo de administrador deste membro?"
           );
 
           if (!confirmar) return;
@@ -3639,7 +3810,7 @@ function destacarMencoes(texto) {
       <span class="mencao-comentario">
         @$1
       </span>
-    `,
+    `
   );
 }
 
@@ -3740,7 +3911,7 @@ async function abrirLixeira() {
     }
 
     const diasRestantes = Math.ceil(
-      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24),
+      (item.expiraEm - Date.now()) / (1000 * 60 * 60 * 24)
     );
 
     const div = document.createElement("div");
@@ -3780,23 +3951,23 @@ async function abrirLixeira() {
         await set(
           ref(
             db,
-            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`,
+            `agendas/${agendaId}/eventos/${item.dados.dataKey}/${item.dados.id}`
           ),
-          item.dados,
+          item.dados
         );
       }
 
       if (item.tipo === "anotacao") {
         await set(
           ref(db, `anotacoes/${item.dados.uid}/${agendaId}/${item.dados.id}`),
-          item.dados,
+          item.dados
         );
       }
 
       if (item.tipo === "tarefa") {
         await set(
           ref(db, `tarefas/${item.dados.uid}/${agendaId}/${item.dados.id}`),
-          item.dados,
+          item.dados
         );
       }
 

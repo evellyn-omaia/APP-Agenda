@@ -22,19 +22,99 @@
 
 <body>
 
-  <div class="container">
-    <h1>Bem-vindo</h1>
+  <main class="container selecionar-agenda-container">
 
-    <button id="btnCriar">Criar uma agenda</button>
+    <!-- LISTA DAS AGENDAS DO USUÁRIO -->
+    <section class="minhas-agendas">
 
-    <div class="divider"><span>ou</span></div>
+      <h1>Escolha uma agenda</h1>
 
-    <input id="codigo" placeholder="Digite o código da agenda">
-    <button id="btnEntrar">Entrar em uma agenda</button>
-  </div>
+      <p class="texto-selecao">
+        Selecione uma agenda da qual você participa.
+      </p>
 
-  <script type="module" src="selecionarAgenda.js"></script>
-  <script src="./js/pwa-register.js"></script>
+      <!--
+        O JavaScript colocará os cards das agendas
+        dentro desta div.
+      -->
+      <div
+        id="listaAgendas"
+        class="lista-agendas"
+      ></div>
+
+      <!--
+        Esta mensagem aparece quando o usuário
+        ainda não participa de nenhuma agenda.
+      -->
+      <p
+        id="mensagemSemAgendas"
+        class="mensagem-sem-agendas"
+        style="display: none;"
+      >
+        Você ainda não participa de nenhuma agenda.
+      </p>
+
+    </section>
+
+    <div class="divider">
+      <span>ou</span>
+    </div>
+
+    <!-- CRIAR OU ENTRAR EM UMA NOVA AGENDA -->
+    <section class="acoes-agenda">
+
+      <div class="bloco-agenda">
+
+        <h2>Criar nova agenda</h2>
+
+        <input
+          type="text"
+          id="nomeAgenda"
+          placeholder="Nome da agenda"
+          maxlength="60"
+        >
+
+        <button
+          type="button"
+          id="btnCriar"
+        >
+          Criar agenda
+        </button>
+
+      </div>
+
+      <div class="bloco-agenda">
+
+        <h2>Entrar com código</h2>
+
+        <input
+          type="text"
+          id="codigo"
+          placeholder="Digite o código da agenda"
+          maxlength="6"
+          autocomplete="off"
+        >
+
+        <button
+          type="button"
+          id="btnEntrar"
+        >
+          Entrar em uma agenda
+        </button>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <script
+    type="module"
+    src="./selecionarAgenda.js"
+  ></script>
+
+  <script src="./pwa-register.js"></script>
+
 </body>
 
 </html>

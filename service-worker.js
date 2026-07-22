@@ -9,15 +9,15 @@ const FILES_TO_CACHE = [
   "./css/style.css",
   "./css/styleAgenda.css",
 
-  "./js/script.js",
-  "./js/selecionarAgenda.js",
-  "./js/calendar.js",
-  "./js/pwa-register.js",
+  "./main.js",
+  "./selecionarAgenda.js",
+  "./calendar.js",
+  "./pwa-register.js",
 
   "./manifest.webmanifest",
 
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {

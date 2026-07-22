@@ -4990,3 +4990,139 @@ body.pagina-selecao-agenda {
     padding: 16px;
   }
 }
+
+/* =====================================================
+   CORREÇÃO DEFINITIVA DE ROLAGEM NO CELULAR
+===================================================== */
+
+@media (max-width: 850px) {
+
+  html {
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 100% !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    scroll-behavior: smooth;
+  }
+
+  body.pagina-selecao-agenda {
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 100vh !important;
+
+    margin: 0 !important;
+    padding: 16px !important;
+
+    display: block !important;
+
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+
+    touch-action: pan-y;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .painel-selecao-agenda {
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    display: block !important;
+
+    overflow: visible !important;
+  }
+
+  .cabecalho-selecao-agenda {
+    width: 100%;
+
+    position: static !important;
+  }
+
+  .conteudo-selecao-agenda {
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    display: block !important;
+
+    overflow: visible !important;
+  }
+
+  .secao-lista-agendas {
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    overflow: visible !important;
+
+    border-right: none !important;
+  }
+
+  .secao-acoes-agenda {
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    overflow: visible !important;
+  }
+
+  /*
+    Somente a lista das agendas possui
+    rolagem interna quando houver muitas.
+  */
+  .pagina-selecao-agenda .lista-agendas {
+    width: 100%;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: 300px !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    touch-action: pan-y;
+
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+
+/* CELULARES MENORES */
+
+@media (max-width: 520px) {
+
+  body.pagina-selecao-agenda {
+    padding: 8px !important;
+  }
+
+  .painel-selecao-agenda {
+    border-radius: 18px;
+  }
+
+  .cabecalho-selecao-agenda {
+    padding: 20px 16px !important;
+  }
+
+  .secao-lista-agendas,
+  .secao-acoes-agenda {
+    padding: 18px 14px !important;
+  }
+
+  .pagina-selecao-agenda .lista-agendas {
+    max-height: 280px !important;
+  }
+}

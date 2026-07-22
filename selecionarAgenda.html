@@ -3,117 +3,270 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
   <title>Selecionar Agenda</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="shortcut icon" href="./icons/icon-web.png" type="image/x-icon">
 
-  <link rel="manifest" href="./manifest.webmanifest" />
-<meta name="theme-color" content="#6c63ff" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="Agenda" />
+  <link
+    rel="shortcut icon"
+    href="./icons/icon-web.png"
+    type="image/x-icon"
+  >
+  
+  <link
+    rel="manifest"
+    href="./manifest.webmanifest"
+  >
 
-  <meta name="theme-color" content="#0f172a">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta
+    name="theme-color"
+    content="#111f46"
+  >
+
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
+  >
+
+  <meta
+    name="apple-mobile-web-app-status-bar-style"
+    content="default"
+  >
+
+  <meta
+    name="apple-mobile-web-app-title"
+    content="Agenda"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="styleAgenda.css">
+
+  <!--
+    O ?v=5 ajuda a impedir que o celular
+    carregue uma versão antiga do CSS.
+  -->
+  <link
+    rel="stylesheet"
+    href="./style.css?v=5"
+  >
 </head>
 
-<body>
+<body class="pagina-selecao-agenda">
 
-  <main class="container selecionar-agenda-container">
+  <main class="painel-selecao-agenda">
 
-    <!-- LISTA DAS AGENDAS DO USUÁRIO -->
-    <section class="minhas-agendas">
+    <!-- CABEÇALHO PRINCIPAL -->
+    <header class="cabecalho-selecao-agenda">
 
-      <h1>Escolha uma agenda</h1>
+      <div class="cabecalho-selecao-texto">
 
-      <p class="texto-selecao">
-        Selecione uma agenda da qual você participa.
-      </p>
+        <div class="icone-cabecalho-agenda">
+          📅
+        </div>
 
-      <!--
-        O JavaScript colocará os cards das agendas
-        dentro desta div.
-      -->
-      <div
-        id="listaAgendas"
-        class="lista-agendas"
-      ></div>
+        <div>
+          <h1>Escolha uma agenda</h1>
 
-      <!--
-        Esta mensagem aparece quando o usuário
-        ainda não participa de nenhuma agenda.
-      -->
-      <p
-        id="mensagemSemAgendas"
-        class="mensagem-sem-agendas"
-        style="display: none;"
-      >
-        Você ainda não participa de nenhuma agenda.
-      </p>
+          <p>
+            Selecione a agenda que deseja acessar.
+          </p>
+        </div>
 
-    </section>
+      </div>
 
-    <div class="divider">
-      <span>ou</span>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL EM DUAS COLUNAS -->
+    <div class="conteudo-selecao-agenda">
+
+      <!-- COLUNA DA LISTA DE AGENDAS -->
+      <section class="secao-lista-agendas">
+
+        <div class="topo-lista-agendas">
+
+          <div>
+            <h2>Suas agendas</h2>
+
+            <p>
+              Agendas das quais você participa
+            </p>
+          </div>
+
+          <span class="indicador-rolagem">
+            Role para ver mais
+          </span>
+
+        </div>
+
+        <!--
+          O selecionarAgenda.js continuará colocando
+          os cards dentro desta mesma div.
+        -->
+        <div
+          id="listaAgendas"
+          class="lista-agendas"
+        ></div>
+
+        <!-- MENSAGEM QUANDO NÃO EXISTEM AGENDAS -->
+        <div
+          id="mensagemSemAgendas"
+          class="mensagem-sem-agendas"
+          style="display: none;"
+        >
+          <div class="icone-sem-agendas">
+            📭
+          </div>
+
+          <strong>
+            Nenhuma agenda encontrada
+          </strong>
+
+          <p>
+            Crie uma agenda ou entre utilizando um código.
+          </p>
+        </div>
+
+      </section>
+
+      <!-- COLUNA DE CRIAR OU ENTRAR -->
+      <section class="secao-acoes-agenda">
+
+        <div class="cabecalho-acoes-agenda">
+          <h2>Adicionar agenda</h2>
+
+          <p>
+            Crie uma nova agenda ou participe de uma existente.
+          </p>
+        </div>
+
+        <!-- CRIAR AGENDA -->
+        <div class="bloco-acao-agenda">
+
+          <div class="topo-bloco-acao">
+
+            <div class="icone-acao-agenda">
+              +
+            </div>
+
+            <div>
+              <h3>Criar nova agenda</h3>
+
+              <p>
+                Você será o administrador.
+              </p>
+            </div>
+
+          </div>
+
+          <label for="nomeAgenda">
+            Nome da agenda
+          </label>
+
+          <input
+            type="text"
+            id="nomeAgenda"
+            placeholder="Ex.: Agenda da turma"
+            maxlength="60"
+            autocomplete="off"
+          >
+
+          <button
+            type="button"
+            id="btnCriar"
+            class="btn-principal-agenda"
+          >
+            Criar agenda
+          </button>
+
+        </div>
+
+        <!-- DIVISOR -->
+        <div class="divisor-acoes-agenda">
+          <span>ou</span>
+        </div>
+
+        <!-- ENTRAR COM CÓDIGO -->
+        <div class="bloco-acao-agenda">
+
+          <div class="topo-bloco-acao">
+
+            <div class="icone-acao-agenda icone-codigo-agenda">
+              #
+            </div>
+
+            <div>
+              <h3>Entrar com código</h3>
+
+              <p>
+                Use o código enviado pelo administrador.
+              </p>
+            </div>
+
+          </div>
+
+          <label for="codigo">
+            Código da agenda
+          </label>
+
+          <input
+            type="text"
+            id="codigo"
+            placeholder="Digite o código"
+            maxlength="6"
+            autocomplete="off"
+            autocapitalize="characters"
+          >
+
+          <button
+            type="button"
+            id="btnEntrar"
+            class="btn-secundario-agenda"
+          >
+            Entrar na agenda
+          </button>
+
+        </div>
+
+        <div class="aviso-codigo-agenda">
+          <span>ⓘ</span>
+
+          <p>
+            O código identifica uma agenda e pode ser
+            compartilhado com outros membros.
+          </p>
+        </div>
+
+      </section>
+
     </div>
-
-    <!-- CRIAR OU ENTRAR EM UMA NOVA AGENDA -->
-    <section class="acoes-agenda">
-
-      <div class="bloco-agenda">
-
-        <h2>Criar nova agenda</h2>
-
-        <input
-          type="text"
-          id="nomeAgenda"
-          placeholder="Nome da agenda"
-          maxlength="60"
-        >
-
-        <button
-          type="button"
-          id="btnCriar"
-        >
-          Criar agenda
-        </button>
-
-      </div>
-
-      <div class="bloco-agenda">
-
-        <h2>Entrar com código</h2>
-
-        <input
-          type="text"
-          id="codigo"
-          placeholder="Digite o código da agenda"
-          maxlength="6"
-          autocomplete="off"
-        >
-
-        <button
-          type="button"
-          id="btnEntrar"
-        >
-          Entrar em uma agenda
-        </button>
-
-      </div>
-
-    </section>
 
   </main>
 
   <script
     type="module"
-    src="./selecionarAgenda.js"
+    src="./selecionarAgenda.js?v=5"
   ></script>
 
-  <script src="./pwa-register.js"></script>
+  <script src="./pwa-register.js?v=5"></script>
 
 </body>
 

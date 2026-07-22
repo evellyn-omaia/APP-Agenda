@@ -6,6 +6,10 @@ import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
   signOut,
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
@@ -40,6 +44,16 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getDatabase(app);
+
+const persistenciaAuth = setPersistence(
+  auth,
+  browserLocalPersistence,
+).catch((erro) => {
+  console.error(
+    "Erro ao configurar persistência do login:",
+    erro,
+  );
+});
 
 // ========================
 // CADASTRO
@@ -77,10 +91,65 @@ export async function login(email, senha) {
 // LOGIN COM GOOGLE
 // ========================
 
-const provider = new GoogleAuthProvider();
+const provider =
+  new GoogleAuthProvider();
 
-export function loginComGoogle() {
-  return signInWithPopup(auth, provider);
+provider.setCustomParameters({
+  prompt: "select_account",
+});
+
+function dispositivoMovel() {
+  return /Android|iPhone|iPad|iPod/i.test(
+    navigator.userAgent,
+  );
+}
+
+export async function loginComGoogle() {
+  await persistenciaAuth;
+
+  /*
+    No celular usa redirecionamento.
+    No computador continua usando popup.
+  */
+  if (dispositivoMovel()) {
+    await signInWithRedirect(
+      auth,
+      provider,
+    );
+
+    return null;
+  }
+
+  return signInWithPopup(
+    auth,
+    provider,
+  );
+}
+
+export async function processarLoginGoogle() {
+  await persistenciaAuth;
+
+  try {
+    const resultado =
+      await getRedirectResult(auth);
+
+    if (!resultado?.user) {
+      return null;
+    }
+
+    await salvarUsuarioGoogle(
+      resultado.user,
+    );
+
+    return resultado.user;
+  } catch (erro) {
+    console.error(
+      "Erro ao concluir login com Google:",
+      erro,
+    );
+
+    throw erro;
+  }
 }
 
 // ========================

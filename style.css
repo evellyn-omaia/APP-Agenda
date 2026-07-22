@@ -179,6 +179,97 @@ button:active {
   background: rgba(255, 255, 255, 0.1);
   z-index: -1;
 }
+/* =========================================
+   CAMPO DE SENHA DA TELA DE LOGIN
+========================================= */
+
+.campo-senha {
+  position: relative;
+
+  width: 100%;
+
+  display: block;
+}
+
+/* Input de senha */
+
+.campo-senha #senha {
+  width: 100%;
+
+  padding-right: 52px;
+
+  margin: 0;
+
+  box-sizing: border-box;
+}
+
+/* Botão do olho */
+
+.campo-senha .btn-toggle-senha {
+  all: unset;
+
+  position: absolute;
+
+  top: 50%;
+  right: 14px;
+
+  transform: translateY(-50%);
+
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  box-sizing: border-box;
+
+  border-radius: 9px;
+
+  color: #94a3b8;
+
+  cursor: pointer;
+
+  z-index: 5;
+
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.campo-senha .btn-toggle-senha:hover {
+  color: #ffffff;
+
+  background:
+    rgba(255, 255, 255, 0.08);
+}
+
+.campo-senha .btn-toggle-senha:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* SVG do olho */
+
+.campo-senha .icone-senha {
+  width: 19px;
+  height: 19px;
+
+  display: block;
+
+  fill: none;
+  stroke: currentColor;
+
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  pointer-events: none;
+}
+
+.campo-senha .icone-senha.oculto {
+  display: none;
+}
 
 /* =========================
    RESPONSIVO LOGIN / SELECIONAR AGENDA

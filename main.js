@@ -1,106 +1,71 @@
 import {
   cadastrar,
+  getUsuarioAutenticado,
   login,
   loginComGoogle,
   processarLoginGoogle,
   salvarUsuarioGoogle,
-  auth,
 } from "./firebaseAuth.js";
-
-import {
-  onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 // ========================================
 // ELEMENTOS
 // ========================================
 
-const email =
-  document.getElementById("email");
-
-const senha =
-  document.getElementById("senha");
-
-const btnCadastro =
-  document.getElementById("btnCadastro");
-
-  const btnMostrarSenha =
-  document.getElementById("toggleSenha");
-
-  const iconeMostrarSenha =
-  document.getElementById(
-    "iconeMostrarSenha",
-  );
-
-const iconeOcultarSenha =
-  document.getElementById(
-    "iconeOcultarSenha",
-  );
-
-const btnLogin =
-  document.getElementById("btnLogin");
-
-const btnGoogle =
-  document.getElementById("btnGoogle");
-
-  // ========================================
-// MOSTRAR / OCULTAR SENHA
-// ========================================
-
-// ========================================
-// MOSTRAR E OCULTAR SENHA
-// ========================================
-
-btnMostrarSenha.addEventListener(
-  "click",
-  () => {
-    const senhaEstaOculta =
-      senha.type === "password";
-
-    senha.type =
-      senhaEstaOculta
-        ? "text"
-        : "password";
-
-    iconeMostrarSenha.classList.toggle(
-      "oculto",
-      senhaEstaOculta,
-    );
-
-    iconeOcultarSenha.classList.toggle(
-      "oculto",
-      !senhaEstaOculta,
-    );
-
-    btnMostrarSenha.setAttribute(
-      "aria-label",
-      senhaEstaOculta
-        ? "Ocultar senha"
-        : "Mostrar senha",
-    );
-
-    btnMostrarSenha.title =
-      senhaEstaOculta
-        ? "Ocultar senha"
-        : "Mostrar senha";
-
-    senha.focus();
-
-    const finalDoTexto =
-      senha.value.length;
-
-    senha.setSelectionRange(
-      finalDoTexto,
-      finalDoTexto,
-    );
-  },
-);
+const email = document.getElementById("email");
+const senha = document.getElementById("senha");
+const btnCadastro = document.getElementById("btnCadastro");
+const btnLogin = document.getElementById("btnLogin");
+const btnGoogle = document.getElementById("btnGoogle");
+const btnMostrarSenha = document.getElementById("toggleSenha");
+const iconeMostrarSenha = document.getElementById("iconeMostrarSenha");
+const iconeOcultarSenha = document.getElementById("iconeOcultarSenha");
 
 let redirecionando = false;
+let processandoLogin = false;
 
-// ========================================
-// REDIRECIONAR USUÁRIO LOGADO
-// ========================================
+function definirBotoesDesabilitados(desabilitados) {
+  btnLogin.disabled = desabilitados;
+  btnCadastro.disabled = desabilitados;
+  btnGoogle.disabled = desabilitados;
+}
+
+function validarCredenciais() {
+  const emailInformado = email.value.trim();
+  const senhaInformada = senha.value;
+
+  if (!emailInformado) {
+    throw new Error("Digite seu e-mail.");
+  }
+
+  if (!senhaInformada) {
+    throw new Error("Digite sua senha.");
+  }
+
+  return {
+    email: emailInformado,
+    senha: senhaInformada,
+  };
+}
+
+function mensagemErroAuth(erro) {
+  const mensagens = {
+    "auth/invalid-credential": "E-mail ou senha incorretos.",
+    "auth/invalid-email": "Digite um e-mail válido.",
+    "auth/missing-password": "Digite sua senha.",
+    "auth/weak-password": "A senha precisa ter pelo menos 6 caracteres.",
+    "auth/email-already-in-use": "Este e-mail já possui uma conta.",
+    "auth/network-request-failed": "Falha de conexão. Verifique sua internet e tente novamente.",
+    "auth/popup-closed-by-user": "A janela do Google foi fechada antes da conclusão do login.",
+    "auth/popup-blocked": "O navegador bloqueou a janela do Google. Permita pop-ups para este site.",
+    "auth/unauthorized-domain": "O domínio deste site não está autorizado no Firebase Authentication.",
+    "auth/operation-not-allowed": "Este tipo de login não está habilitado no Firebase.",
+    "auth/cancelled-popup-request": "Já existe uma tentativa de login com Google em andamento.",
+  };
+
+  return mensagens[erro?.code]
+    || erro?.message
+    || "Não foi possível concluir a autenticação.";
+}
 
 async function redirecionarUsuario(user) {
   if (!user || redirecionando) {
@@ -108,187 +73,169 @@ async function redirecionarUsuario(user) {
   }
 
   redirecionando = true;
+  definirBotoesDesabilitados(true);
 
-  /*
-    Depois de qualquer login, o usuário
-    sempre vai para a tela de seleção
-    de agendas.
-  */
-  window.location.replace(
-    "./selecionarAgenda.html",
-  );
+  // Confirma que a sessão e o token estão disponíveis antes da navegação.
+  await user.getIdToken();
+
+  window.location.replace("./selecionarAgenda.html");
 }
 
 // ========================================
-// PROCESSAR RETORNO DO GOOGLE NO CELULAR
+// MOSTRAR / OCULTAR SENHA
 // ========================================
 
-async function verificarRetornoGoogle() {
-  try {
-    const user =
-      await processarLoginGoogle();
+btnMostrarSenha.addEventListener("click", () => {
+  const senhaEstaOculta = senha.type === "password";
 
-    if (user) {
-      await redirecionarUsuario(user);
-    }
-  } catch (erro) {
-    console.error(
-      "Erro no retorno do Google:",
-      erro,
-    );
+  senha.type = senhaEstaOculta
+    ? "text"
+    : "password";
 
-    alert(
-      erro.message ||
-      "Não foi possível concluir o login com Google.",
-    );
-  }
-}
+  iconeMostrarSenha.classList.toggle("oculto", senhaEstaOculta);
+  iconeOcultarSenha.classList.toggle("oculto", !senhaEstaOculta);
 
-await verificarRetornoGoogle();
+  const novoRotulo = senhaEstaOculta
+    ? "Ocultar senha"
+    : "Mostrar senha";
 
-// ========================================
-// VERIFICAR SESSÃO JÁ EXISTENTE
-// ========================================
+  btnMostrarSenha.setAttribute("aria-label", novoRotulo);
+  btnMostrarSenha.title = novoRotulo;
 
-onAuthStateChanged(
-  auth,
-  async (user) => {
-    if (!user) {
-      return;
-    }
+  senha.focus();
 
-    await redirecionarUsuario(user);
-  },
-);
+  const finalDoTexto = senha.value.length;
+  senha.setSelectionRange(finalDoTexto, finalDoTexto);
+});
 
 // ========================================
 // CADASTRO
 // ========================================
 
-btnCadastro.onclick = async () => {
+btnCadastro.addEventListener("click", async () => {
+  if (processandoLogin) return;
+
+  const textoOriginal = btnCadastro.textContent;
+
   try {
-    btnCadastro.disabled = true;
+    processandoLogin = true;
+    definirBotoesDesabilitados(true);
+    btnCadastro.textContent = "Criando conta...";
 
-    btnCadastro.textContent =
-      "Criando conta...";
-
-    const user =
-      await cadastrar(
-        email.value.trim(),
-        senha.value,
-      );
-
-    alert("Conta criada!");
+    const credenciais = validarCredenciais();
+    const user = await cadastrar(credenciais.email, credenciais.senha);
 
     await redirecionarUsuario(user);
   } catch (erro) {
-    console.error(
-      "Erro ao cadastrar:",
-      erro,
-    );
+    console.error("Erro ao cadastrar:", erro);
+    alert(mensagemErroAuth(erro));
 
-    alert(
-      erro.message ||
-      "Não foi possível criar a conta.",
-    );
-
-    btnCadastro.disabled = false;
-
-    btnCadastro.textContent =
-      "Criar conta";
+    processandoLogin = false;
+    definirBotoesDesabilitados(false);
+    btnCadastro.textContent = textoOriginal;
   }
-};
+});
 
 // ========================================
 // LOGIN COM E-MAIL
 // ========================================
 
-btnLogin.onclick = async () => {
+btnLogin.addEventListener("click", async () => {
+  if (processandoLogin) return;
+
+  const textoOriginal = btnLogin.textContent;
+
   try {
-    btnLogin.disabled = true;
+    processandoLogin = true;
+    definirBotoesDesabilitados(true);
+    btnLogin.textContent = "Entrando...";
 
-    btnLogin.textContent =
-      "Entrando...";
+    const credenciais = validarCredenciais();
+    const resultado = await login(credenciais.email, credenciais.senha);
 
-    const resultado =
-      await login(
-        email.value.trim(),
-        senha.value,
-      );
-
-    await redirecionarUsuario(
-      resultado.user,
-    );
+    await redirecionarUsuario(resultado.user);
   } catch (erro) {
-    console.error(
-      "Erro no login:",
-      erro,
-    );
+    console.error("Erro no login:", erro);
+    alert(mensagemErroAuth(erro));
 
-    alert(
-      erro.message ||
-      "Não foi possível entrar.",
-    );
-
-    btnLogin.disabled = false;
-
-    btnLogin.textContent =
-      "Entrar";
+    processandoLogin = false;
+    definirBotoesDesabilitados(false);
+    btnLogin.textContent = textoOriginal;
   }
-};
+});
+
+// Permite enviar o login pelo teclado do celular ou computador.
+senha.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    btnLogin.click();
+  }
+});
 
 // ========================================
 // LOGIN COM GOOGLE
 // ========================================
 
-btnGoogle.onclick = async () => {
+btnGoogle.addEventListener("click", async () => {
+  if (processandoLogin) return;
+
+  const textoOriginal = btnGoogle.textContent;
+
   try {
-    btnGoogle.disabled = true;
+    processandoLogin = true;
+    definirBotoesDesabilitados(true);
+    btnGoogle.textContent = "Abrindo Google...";
 
-    btnGoogle.textContent =
-      "Abrindo Google...";
-
-    const resultado =
-      await loginComGoogle();
+    const resultado = await loginComGoogle();
 
     /*
-      No celular, o login usa redirecionamento.
-
-      Nesse caso, resultado será null porque
-      o navegador sairá da página atual.
-
-      Quando o usuário voltar do Google,
-      processarLoginGoogle() concluirá o login.
+      O listener global que redirecionava automaticamente foi removido.
+      Assim, o usuário do Google é salvo no Realtime Database antes da
+      troca de página, sem corrida entre duas operações assíncronas.
     */
-    if (!resultado?.user) {
+    await salvarUsuarioGoogle(resultado.user);
+    await redirecionarUsuario(resultado.user);
+  } catch (erro) {
+    console.error("Erro no login com Google:", erro);
+    alert(mensagemErroAuth(erro));
+
+    processandoLogin = false;
+    definirBotoesDesabilitados(false);
+    btnGoogle.textContent = textoOriginal;
+  }
+});
+
+// ========================================
+// INICIALIZAÇÃO DA TELA
+// ========================================
+
+async function iniciarTelaLogin() {
+  definirBotoesDesabilitados(true);
+
+  try {
+    /*
+      Conclui uma tentativa antiga de signInWithRedirect(), caso o aparelho
+      ainda esteja retornando de uma versão anterior do projeto.
+    */
+    const usuarioDoRedirect = await processarLoginGoogle();
+
+    if (usuarioDoRedirect) {
+      await redirecionarUsuario(usuarioDoRedirect);
       return;
     }
 
-    /*
-      No computador, o login por popup retorna
-      o usuário imediatamente.
-    */
-    await salvarUsuarioGoogle(
-      resultado.user,
-    );
+    const usuarioAtual = await getUsuarioAutenticado();
 
-    await redirecionarUsuario(
-      resultado.user,
-    );
+    if (usuarioAtual) {
+      await redirecionarUsuario(usuarioAtual);
+      return;
+    }
   } catch (erro) {
-    console.error(
-      "Erro no login com Google:",
-      erro,
-    );
-
-    alert(
-      erro.message ||
-      "Não foi possível entrar com Google.",
-    );
-
-    btnGoogle.disabled = false;
-
-    btnGoogle.textContent =
-      "Entrar com Google";
+    console.error("Erro ao restaurar a sessão:", erro);
   }
-};
+
+  processandoLogin = false;
+  definirBotoesDesabilitados(false);
+}
+
+await iniciarTelaLogin();

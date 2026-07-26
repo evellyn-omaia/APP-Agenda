@@ -1,17 +1,11 @@
 import {
-  getAuth,
-  onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-
-import {
+  auth,
+  getUsuarioAutenticado,
   getUserData,
-  criarAgenda,
-  entrarNaAgenda,
   logout,
 } from "./firebaseAuth.js";
 
 import {
-  getDatabase,
   ref,
   push,
   get,
@@ -23,8 +17,7 @@ import {
 
 import { db } from "./firebaseDB.js";
 
-// LISTENER DE LOGIN
-const auth = getAuth();
+// AUTENTICAÇÃO CENTRALIZADA
 
 function nomeUsuario(email) {
   return email.split("@")[0];
@@ -36,72 +29,68 @@ let currentUser = null;
 
 let notificacoes = [];
 
-onAuthStateChanged(auth, async (user) => {
+async function iniciarAgenda() {
+  /*
+    Aguarda a restauração completa da sessão antes de decidir se o usuário
+    deve voltar para o login. Isso evita o redirecionamento prematuro no
+    navegador móvel.
+  */
+  const user = await getUsuarioAutenticado();
+
   if (!user) {
-    window.location.href = "index.html";
+    window.location.replace("./index.html");
     return;
   }
 
-  const data = await getUserData(user.uid);
+  try {
+    const data = await getUserData(user.uid);
 
-  /*
-    Agora não usamos mais agendaId diretamente
-    dentro do usuário.
+    if (!data?.agendaAtual) {
+      window.location.replace("./selecionarAgenda.html");
+      return;
+    }
 
-    Usamos agendaAtual.
-  */
-  if (!data?.agendaAtual) {
-    window.location.href = "selecionarAgenda.html";
+    const membroSnapshot = await get(
+      ref(db, `agendas/${data.agendaAtual}/membros/${user.uid}`),
+    );
 
-    return;
+    if (!membroSnapshot.exists()) {
+      await update(ref(db, `usuarios/${user.uid}`), {
+        agendaAtual: null,
+      });
+
+      window.location.replace("./selecionarAgenda.html");
+      return;
+    }
+
+    currentUser = user;
+    agendaId = data.agendaAtual;
+    role = membroSnapshot.val().role || "membro";
+
+    carregarCalendario();
+    ouvirNotificacoes();
+    criarBotaoNotificacao();
+  } catch (error) {
+    console.error("Erro ao iniciar a agenda:", error);
+
+    const conteudoPrincipal = document.getElementById("conteudo");
+
+    if (conteudoPrincipal) {
+      conteudoPrincipal.innerHTML = `
+        <section class="erro-inicializacao">
+          <h2>Não foi possível carregar a agenda</h2>
+          <p>Verifique sua conexão e tente novamente.</p>
+          <button id="tentarNovamente">Tentar novamente</button>
+        </section>
+      `;
+
+      document.getElementById("tentarNovamente")?.addEventListener(
+        "click",
+        () => window.location.reload(),
+      );
+    }
   }
-
-  /*
-    Busca o cadastro do usuário dentro
-    da agenda que ele escolheu.
-  */
-  const membroSnapshot = await get(
-    ref(db, `agendas/${data.agendaAtual}/membros/${user.uid}`)
-  );
-
-  /*
-    Segurança:
-
-    Caso agendaAtual esteja preenchida,
-    mas o usuário não faça mais parte da agenda,
-    limpamos agendaAtual e voltamos para a seleção.
-  */
-  if (!membroSnapshot.exists()) {
-    await update(ref(db, `usuarios/${user.uid}`), {
-      agendaAtual: null,
-    });
-
-    window.location.href = "selecionarAgenda.html";
-
-    return;
-  }
-
-  currentUser = user;
-
-  /*
-    A agenda usada pelo calendário será
-    a agenda escolhida na tela anterior.
-  */
-  agendaId = data.agendaAtual;
-
-  /*
-    O cargo agora vem de dentro da agenda.
-
-    Exemplo:
-
-    agendas/ABC123/membros/UID/role
-  */
-  role = membroSnapshot.val().role || "membro";
-
-  carregarCalendario();
-  ouvirNotificacoes();
-  criarBotaoNotificacao();
-});
+}
 
 const conteudo = document.getElementById("conteudo");
 
@@ -1732,30 +1721,26 @@ if (sairAgendaBtn) {
         if (membrosSnap.exists()) {
           const membros = membrosSnap.val();
 
-          // limpa usuários
-          // remove esta agenda da lista do usuário
-await remove(
-  ref(
-    db,
-    `usuarios/${uid}/agendas/${agendaId}`,
-  ),
-);
+          // Remove o vínculo da agenda de todos os membros.
+          for (const uid of Object.keys(membros)) {
+            await remove(
+              ref(db, `usuarios/${uid}/agendas/${agendaId}`),
+            );
 
-const usuarioSnapshot = await get(
-  ref(db, `usuarios/${uid}`),
-);
+            const usuarioSnapshot = await get(
+              ref(db, `usuarios/${uid}`),
+            );
 
-if (
-  usuarioSnapshot.exists() &&
-  usuarioSnapshot.val().agendaAtual === agendaId
-) {
-  await update(
-    ref(db, `usuarios/${uid}`),
-    {
-      agendaAtual: null,
-    },
-  );
-}
+            if (
+              usuarioSnapshot.exists()
+              && usuarioSnapshot.val().agendaAtual === agendaId
+            ) {
+              await update(
+                ref(db, `usuarios/${uid}`),
+                { agendaAtual: null },
+              );
+            }
+          }
         }
 
         // remove agenda inteira
@@ -3993,3 +3978,4 @@ async function abrirLixeira() {
 
 export { carregarCalendario };
 // ================== START ==================
+await iniciarAgenda();

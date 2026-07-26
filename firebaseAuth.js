@@ -1,65 +1,35 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-
 import {
-  getAuth,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
   getRedirectResult,
-  setPersistence,
-  browserLocalPersistence,
+  GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 import {
-  getDatabase,
-  ref,
-  set,
   get,
-  update,
+  ref,
   remove,
+  set,
+  update,
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
-// ========================
-// CONFIGURAÇÃO DO FIREBASE
-// ========================
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAxBIX4PPMmLthiUX67OA07BYtDRhkklOM",
-  authDomain: "agenda-dois.firebaseapp.com",
-  databaseURL: "https://agenda-dois-default-rtdb.firebaseio.com",
-  projectId: "agenda-dois",
-  storageBucket: "agenda-dois.firebasestorage.app",
-  messagingSenderId: "400118550899",
-  appId: "1:400118550899:web:71b79e181f1e25b64cb506",
-};
-
-// ========================
-// INICIALIZAÇÃO
-// ========================
-
-const app = initializeApp(firebaseConfig);
-
-export const auth = getAuth(app);
-export const db = getDatabase(app);
-
-const persistenciaAuth = setPersistence(
+import {
+  aguardarInicializacaoAuth,
   auth,
-  browserLocalPersistence,
-).catch((erro) => {
-  console.error(
-    "Erro ao configurar persistência do login:",
-    erro,
-  );
-});
+  db,
+} from "./firebaseConfig.js";
+
+export { auth, db };
 
 // ========================
 // CADASTRO
 // ========================
 
 export async function cadastrar(email, senha) {
+  await aguardarInicializacaoAuth();
+
   const userCredential = await createUserWithEmailAndPassword(
     auth,
     email,
@@ -84,7 +54,18 @@ export async function cadastrar(email, senha) {
 // ========================
 
 export async function login(email, senha) {
-  return signInWithEmailAndPassword(auth, email, senha);
+  await aguardarInicializacaoAuth();
+
+  const resultado = await signInWithEmailAndPassword(
+    auth,
+    email,
+    senha,
+  );
+
+  // Garante que o token já está disponível antes de trocar de página.
+  await resultado.user.getIdToken();
+
+  return resultado;
 }
 
 // ========================
@@ -98,37 +79,25 @@ provider.setCustomParameters({
   prompt: "select_account",
 });
 
-function dispositivoMovel() {
-  return /Android|iPhone|iPad|iPod/i.test(
-    navigator.userAgent,
-  );
-}
-
 export async function loginComGoogle() {
-  await persistenciaAuth;
-
   /*
-    No celular usa redirecionamento.
-    No computador continua usando popup.
+    Não existe nenhum await antes de signInWithPopup(). Isso preserva o gesto
+    direto do clique/toque e evita que navegadores móveis bloqueiem a janela.
+
+    A tela de login já aguarda aguardarInicializacaoAuth() antes de habilitar
+    este botão, e initializeAuth() já nasce com a persistência configurada.
   */
-  if (dispositivoMovel()) {
-    await signInWithRedirect(
-      auth,
-      provider,
-    );
-
-    return null;
-  }
-
-  return signInWithPopup(
+  const resultado = await signInWithPopup(
     auth,
     provider,
   );
+
+  await resultado.user.getIdToken();
+
+  return resultado;
 }
 
 export async function processarLoginGoogle() {
-  await persistenciaAuth;
-
   try {
     const resultado =
       await getRedirectResult(auth);
@@ -141,6 +110,8 @@ export async function processarLoginGoogle() {
       resultado.user,
     );
 
+    await resultado.user.getIdToken();
+
     return resultado.user;
   } catch (erro) {
     console.error(
@@ -150,6 +121,14 @@ export async function processarLoginGoogle() {
 
     throw erro;
   }
+}
+
+// ========================
+// ESTADO ATUAL DA AUTENTICAÇÃO
+// ========================
+
+export async function getUsuarioAutenticado() {
+  return aguardarInicializacaoAuth();
 }
 
 // ========================

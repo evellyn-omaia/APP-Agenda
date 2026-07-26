@@ -4,12 +4,9 @@ import {
   getAgendasDoUsuario,
   getAgendaPorId,
   selecionarAgenda,
+  getUsuarioAutenticado,
   auth,
 } from "./firebaseAuth.js";
-
-import {
-  onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
 
 // ========================================
 // ELEMENTOS DA PÁGINA
@@ -37,21 +34,28 @@ const inputNomeAgenda =
 // VERIFICAR SE O USUÁRIO ESTÁ LOGADO
 // ========================================
 
-onAuthStateChanged(auth, async (user) => {
+async function iniciarTelaSelecao() {
+  /*
+    Aguarda o Firebase restaurar completamente a sessão persistida.
+    A página só decide redirecionar depois desse processo terminar.
+  */
+  const user = await getUsuarioAutenticado();
+
   if (!user) {
-    window.location.href = "index.html";
+    window.location.replace("./index.html");
     return;
   }
 
-  /*
-    Mesmo que o usuário já tenha uma agenda atual,
-    ele não será redirecionado automaticamente.
-
-    A tela continuará aberta para que ele escolha
-    qual agenda deseja acessar.
-  */
-  await carregarAgendasDoUsuario(user.uid);
-});
+  try {
+    /*
+      Mesmo que o usuário já tenha uma agenda atual, ele permanece nesta
+      tela para escolher qual agenda deseja acessar.
+    */
+    await carregarAgendasDoUsuario(user.uid);
+  } catch (error) {
+    console.error("Erro ao iniciar a seleção de agendas:", error);
+  }
+}
 
 // ========================================
 // CARREGAR TODAS AS AGENDAS DO USUÁRIO
@@ -381,3 +385,5 @@ btnEntrar.addEventListener(
     }
   },
 );
+
+await iniciarTelaSelecao();
